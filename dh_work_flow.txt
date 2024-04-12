@@ -1,0 +1,35 @@
+See the
+  Diffie-Hellman Key Exchange Library and Local Attestation Flow
+section in the
+  Intel® Software Guard Extensions (Intel® SGX) SDK for Linux* OS
+manual
+
+enclave 1 (initiator)
+enclave 2 (responder)
+
+step 1 (enclave 1) --- e1_init_session
+  sgx_dh_init_session(SGX_DH_SESSION_INITIATOR,&dh_session);
+
+step 2 (enclave 2) --- e2_init_session
+  sgx_dh_init_session(SGX_DH_SESSION_RESPONDER,&dh_session);
+
+step 3 (enclave 2) --- e2_create_message1
+  sgx_dh_responder_gen_msg1(sgx_dh_msg1_t *msg1,sgx_dh_session_t *dh_session);
+
+step 4 (app)
+       send msg1 from enclave2 to enclave1
+
+step 5 (enclave 1) --- e1_process_message1
+  sgx_dh_initiator_proc_msg1(const sgx_dh_msg1_t *msg1,sgx_dh_msg2_t *msg2,sgx_dh_session_t *dh_session);
+
+step 6 (app)
+       send msg2 from enclave1 to enclave2
+
+step 7 (enclave 2) --- e2_process_message2
+  sgx_dh_responder_proc_msg2(const sgx_dh_msg2_t *msg2,sgx_dh_msg3_t *msg3,sgx_dh_session_t *dh_session,sgx_key_128bit_t *aek,sgx_dh_session_enclave_identity_t *initiator_identity);
+
+step 8 (app)
+       send msg3 from enclave2 to enclave1
+
+step 9 (enclave 1) --- e1_process_message3
+  sgx_dh_initiator_proc_msg3(const sgx_dh_msg3_t *msg3,sgx_dh_session_t *dh_session,sgx_key_128bit_t *aek,sgx_dh_session_enclave_identity_t *responder_identity);
