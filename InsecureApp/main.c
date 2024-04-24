@@ -37,13 +37,47 @@ void hexdump(const void* data, size_t size) {
 }
 
 int main(int argc, char *argv[]) {
+	// Create a new vault
     vault_t* vault = vault_new("vault.dat", "password", "author");
 	vault_print(vault);
+	if(vault_authenticate(vault, "password")) {
+		printf("Authenticated\n");
+		// Add a new entry
+		vault = vault_add(vault, "entry1", "data1");
+		vault = vault_add(vault, "entry2", "data2");
+		vault_print(vault);
 
-	char buffer[VAULT_ENTRY_SIZE];
+		// List all entries
+		vault_entry_t* entry = vault->head;
+		while(entry != NULL) {
+			vault_entry_print(entry);
+			entry = entry->next;
+		}
+
+		// Extract entry
+
+		// Change password
+		vault = vault_change_password(vault, "newpassword");
+		vault_print(vault);
+
+		// Compare digest
+
+	} else {
+		printf("Authentication failed\n");
+		exit(1);
+	}
+
+	printf("Should be %d bytes\n", vault_total_size(vault));
+	char buffer[vault_total_size(vault)];
 	size_t sz = vault_serialize(vault, buffer);
 	printf("Serialized %d bytes to %s\n", sz, vault->filename);
 	hexdump(buffer, sz);	
+	FILE* file = fopen(vault->filename, "wb");
+	fwrite(buffer, 1, sz, file);
+	fclose(file);
+
+
+	vault_free(vault);
 
 	return 0;
 }

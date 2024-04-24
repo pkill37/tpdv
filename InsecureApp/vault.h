@@ -1,6 +1,6 @@
 #pragma once
 
-#define VAULT_ENTRY_SIZE 5000000
+#define VAULT_ENTRY_SIZE 500
 
 typedef struct VaultEntry vault_entry_t;
 struct VaultEntry {
@@ -28,3 +28,8 @@ vault_t* vault_add(vault_t* vault, const char* filename, const char* data);
 vault_t* vault_change_password(vault_t* vault, const char* password);
 size_t vault_entry_serialize(const vault_entry_t *entry, char *buffer);
 size_t vault_serialize(const vault_t *vault, char *buffer);
+
+size_t vault_total_size(const vault_t* vault);
+int vault_authenticate(const vault_t* vault, const char* password);
+void vault_free(vault_t* vault);
+void vault_entry_print(const vault_entry_t *entry);

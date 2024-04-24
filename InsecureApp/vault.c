@@ -4,32 +4,45 @@
 #include "vault.h"
 #include "string.h"
 
+
 vault_t* vault_new(const char* filename, const char* password, const char* author) {
     vault_t* vault = malloc(sizeof(vault_t));
     vault->head = NULL;
     memcpy(vault->magic, (uint8_t[2]){0x56, 0x41}, 2);
-    memcpy(vault->nonce, (uint8_t[4]){0x01, 0x02, 0x03, 0x04}, 4);
+    for (int i = 0; i < 4; i++) vault->nonce[i] = rand() % 256;
     strcpy(vault->filename, filename);
     strcpy(vault->password, password);
     strcpy(vault->author, author);
     return vault;
 }
 
+size_t vault_total_size(const vault_t* vault) {
+    //size_t size = sizeof(vault->nonce) + sizeof(vault->magic) + sizeof(vault->filename) + sizeof(vault->password) + sizeof(vault->author) + sizeof(vault->size) + sizeof(vault->head);
+    size_t size = sizeof(vault_t);
+    size += vault->size * sizeof(vault_entry_t);
+    return size;
+}
+
 void vault_print(const vault_t* vault) {
     printf("+++++++++++++++++++++++++++++++++++++++++\n");
     printf("+ VAULT %s\n", vault->filename);
     printf("+++++++++++++++++++++++++++++++++++++++++\n");
-    printf("| Author: %s\n", vault->author);
-    printf("| Password: %s\n", vault->password);
+    printf("+ Author: %s\n", vault->author);
+    printf("+ Password: %s\n", vault->password);
+    printf("+++++++++++++++++++++++++++++++++++++++++\n");
     vault_entry_t* entry = vault->head;
     size_t i = 0;
     while(entry != NULL) {
-        printf("-----------------------------------------\n");
         printf("| %d: %s\n", i, entry->name);
         printf("-----------------------------------------\n");
         entry = entry->next;
+        i++;
     }
     printf("\n\n");
+}
+
+int vault_authenticate(const vault_t* vault, const char* password) {
+    return strcmp(vault->password, password) == 0;
 }
 
 vault_t* vault_add(vault_t* vault, const char* filename, const char* data) {
@@ -39,6 +52,7 @@ vault_t* vault_add(vault_t* vault, const char* filename, const char* data) {
     entry->next = vault->head;
 
     vault->head = entry;
+    vault->size++;
     return vault;
 }
 
@@ -55,6 +69,11 @@ size_t vault_entry_serialize(const vault_entry_t *entry, char *buffer) {
     memcpy(buffer + offset, entry->data, VAULT_ENTRY_SIZE);
     offset += VAULT_ENTRY_SIZE;
     return offset;
+}
+
+void vault_entry_print(const vault_entry_t *entry) {
+    printf("Entry: %s\n", entry->name);
+    printf("Data: %s\n", entry->data);
 }
 
 // Serialize a Vault
@@ -81,4 +100,15 @@ size_t vault_serialize(const vault_t *vault, char *buffer) {
     }
 
     return offset;
+}
+
+
+void vault_free(vault_t* vault) {
+    vault_entry_t* entry = vault->head;
+    while(entry != NULL) {
+        vault_entry_t* next = entry->next;
+        free(entry);
+        entry = next;
+    }
+    free(vault);
 }
