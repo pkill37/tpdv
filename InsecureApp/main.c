@@ -58,6 +58,26 @@ int main(int argc, char *argv[]) {
 		}
 
 		// Extract entry
+		if (argc == 3 && strcmp(argv[1], "-x") == 0) {
+			vault_entry_t* entry_to_extract = vault_get_entry_by_name(vault, argv[2]);
+
+			int write_result = write_vault_entry_data_to_file(entry_to_extract);
+			if (write_result == 0) {
+        		printf("Contents written successfully!\n");
+    		} else {
+        		printf("There was an error writing to the file\n");
+    		}	
+		}
+
+		// Extract all entries
+		if (argc == 2 && strcmp(argv[1], "-xa") == 0) {
+			int write_result = write_vault_entries_to_files(vault);
+			if (write_result == 0) {
+        		printf("Contents written successfully!\n");
+    		} else {
+        		printf("There was an error writing to the files\n");
+    		}	
+		}
 
 		// Change password
 		vault = vault_change_password(vault, "newpassword");
@@ -79,7 +99,7 @@ int main(int argc, char *argv[]) {
 				printf(" Data: %s\n", entry_to_digest->data);
 				printf(" Size: %zu\n",entry_to_digest->size);
 			} else {
-				printf("Entry not found.\n");
+				printf("Entry not found\n");
 				return 1;
 			}
 

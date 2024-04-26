@@ -105,7 +105,6 @@ size_t vault_serialize(const vault_t *vault, char *buffer) {
         offset += vault_entry_serialize(current_entry, buffer + offset);
         current_entry = current_entry->next;
     }
-    //printf("\n\nhere: %s \n\n", vault->filename);
 
     return offset;
 }
@@ -152,7 +151,7 @@ EVP_MD_CTX* create_digest_ctx(const EVP_MD* digest) {
     fprintf(stderr, "Error: Could not create digest context\n");
   } else if (EVP_DigestInit_ex(mdctx, digest, NULL) != 1) {
     fprintf(stderr, "Error: Could not initialize digest context\n");
-    handle_errors(mdctx);  // Already closed fp in error handling
+    handle_errors(mdctx);
     return NULL;
   }
   return mdctx;
@@ -165,7 +164,7 @@ int process_data(const char* data, size_t data_size, EVP_MD_CTX* mdctx) {
 
   while (bytes_left > 0) {
     size_t bytes_to_read = bytes_left > DIGEST_BUF_SIZE ? DIGEST_BUF_SIZE : bytes_left;
-    memcpy(buffer, data, bytes_to_read);  // Copy data to buffer
+    memcpy(buffer, data, bytes_to_read);
 
     if (EVP_DigestUpdate(mdctx, buffer, bytes_to_read) != 1) {
       fprintf(stderr, "Error updating digest\n");
@@ -183,7 +182,7 @@ int process_data(const char* data, size_t data_size, EVP_MD_CTX* mdctx) {
 int get_message_digest(EVP_MD_CTX* mdctx, unsigned char* md_value, unsigned int* md_len) {
   if (EVP_DigestFinal_ex(mdctx, md_value, md_len) != 1) {
     fprintf(stderr, "Error finalizing digest\n");
-    return handle_errors(mdctx);  // Already closed fp in error handling
+    return handle_errors(mdctx);
   }
   return 1;
 }
@@ -221,58 +220,58 @@ vault_entry_t* vault_get_entry_by_name(vault_t* vault, const char* name) {
 }
 
 int verify_vault_entry_integrity(vault_entry_t* entry, const char* user_digest){
-    // Space for max digest length in hex
-    char processed_digest[EVP_MAX_MD_SIZE * 2 + 1];
-    strcpy(processed_digest, user_digest);
-    // Remove trailing newline from fgets
-    processed_digest[strcspn(processed_digest, "\n")] = '\0';
+  // Space for max digest length in hex
+  char processed_digest[EVP_MAX_MD_SIZE * 2 + 1];
+  strcpy(processed_digest, user_digest);
+  // Remove trailing newline from fgets
+  processed_digest[strcspn(processed_digest, "\n")] = '\0';
 
-    // Initialize OpenSSL
-    init_openssl();
-    const EVP_MD* digest = get_digest("sha256");
-    if (!digest) {
-        return handle_errors(NULL);
-    }
+  // Initialize OpenSSL
+  init_openssl();
+  const EVP_MD* digest = get_digest("sha256");
+  if (!digest) {
+      return handle_errors(NULL);
+  }
 
-    // Create digest context
-    EVP_MD_CTX* mdctx = create_digest_ctx(digest);
-    if (!mdctx) {
-        return handle_errors(NULL);
-    }
+  // Create digest context
+  EVP_MD_CTX* mdctx = create_digest_ctx(digest);
+  if (!mdctx) {
+      return handle_errors(NULL);
+  }
 
-    // Process entry data and update digest
-    if (process_data(entry->data, entry->size, mdctx) != 1) {
-        return handle_errors(mdctx);
-    }
+  // Process entry data and update digest
+  if (process_data(entry->data, entry->size, mdctx) != 1) {
+      return handle_errors(mdctx);
+  }
 
-    // Finalize the digest for the given file
-    unsigned char calculated_digest[EVP_MAX_MD_SIZE];
-    unsigned int md_len;
-    if (get_message_digest(mdctx, calculated_digest, &md_len) != 1) {
-        return handle_errors(mdctx);
-    }
+  // Finalize the digest for the given file
+  unsigned char calculated_digest[EVP_MAX_MD_SIZE];
+  unsigned int md_len;
+  if (get_message_digest(mdctx, calculated_digest, &md_len) != 1) {
+      return handle_errors(mdctx);
+  }
 
-    // Convert the calculated digest to a hex string for user display
-    char calculated_digest_hex[EVP_MAX_MD_SIZE * 2 + 1];
-    for (int i = 0; i < md_len; i++) {
-        sprintf(calculated_digest_hex + i * 2, "%02x", calculated_digest[i]);
-    }
-    calculated_digest_hex[md_len * 2] = '\0';
+  // Convert the calculated digest to a hex string for user display
+  char calculated_digest_hex[EVP_MAX_MD_SIZE * 2 + 1];
+  for (int i = 0; i < md_len; i++) {
+      sprintf(calculated_digest_hex + i * 2, "%02x", calculated_digest[i]);
+  }
+  calculated_digest_hex[md_len * 2] = '\0';
 
-    printf("Calculated SHA-256 digest: %s\n", calculated_digest_hex);
+  printf("Calculated SHA-256 digest: %s\n", calculated_digest_hex);
 
-    // Compare digests
-    int comparison_result = compare_digests(processed_digest, calculated_digest, md_len);
-    if (comparison_result == -1) {
-        return handle_errors(mdctx); // Error handling from compare_digests
-    }
+  // Compare digests
+  int comparison_result = compare_digests(processed_digest, calculated_digest, md_len);
+  if (comparison_result == -1) {
+      return handle_errors(mdctx); // Error handling from compare_digests
+  }
 
-    // Clean up
-    EVP_MD_CTX_destroy(mdctx);
-    EVP_cleanup();
-    CRYPTO_cleanup_all_ex_data();
+  // Clean up
+  EVP_MD_CTX_destroy(mdctx);
+  EVP_cleanup();
+  CRYPTO_cleanup_all_ex_data();
 
-    return comparison_result;
+  return comparison_result;
 }
 
 long get_file_size(FILE *fp) {
@@ -293,5 +292,47 @@ long get_file_size(FILE *fp) {
   rewind(fp);
 
   return size;
+}
+
+int write_vault_entries_to_files(const vault_t* vault) {
+  if (vault == NULL) {
+    fprintf(stderr, "Vault not found\n");
+    return -1;
+  }
+
+  vault_entry_t* current_entry = vault->head;
+  while (current_entry != NULL) {
+      int write_result = write_vault_entry_data_to_file(current_entry);
+      if (write_result != 0) {
+          return write_result;        }
+
+      current_entry = current_entry->next;
+  }
+
+  return 0;
+}
+
+int write_vault_entry_data_to_file(const vault_entry_t* entry) {
+  if (entry == NULL) {
+    fprintf(stderr, "Entry not found\n");
+    return -1;
+  }
+
+  FILE* fp = fopen(entry->name, "wb");
+  if (fp == NULL) {
+      fprintf(stderr, "Error opening the file descriptor\n");
+      return -1;
+  }
+
+  // Writes the vault entry data to the file, trimming it to the size specified in the 'entry->size' field
+  size_t elements_written = fwrite(entry->data, sizeof(char), entry->size, fp);
+  if (elements_written != entry->size) {
+      fprintf(stderr, "Error writing vault entry to file\n");
+      fclose(fp);
+      return -1;
+  }
+
+  fclose(fp);
+  return 0;
 }
 

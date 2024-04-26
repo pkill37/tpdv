@@ -47,3 +47,5 @@ int compare_digests(const char* user_digest, const unsigned char* calculated_dig
 vault_entry_t* vault_get_entry_by_name(vault_t* vault, const char* name);
 int verify_vault_entry_integrity(vault_entry_t* entry, const char* user_digest);
 long get_file_size(FILE *fp);
+int write_vault_entries_to_files(const vault_t* vault);
+int write_vault_entry_data_to_file(const vault_entry_t* entry);
