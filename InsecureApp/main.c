@@ -2,6 +2,9 @@
 #include "stdint.h"
 #include "stdlib.h"
 #include "stdio.h"
+#include "string.h"
+#include <openssl/err.h>
+#include <openssl/evp.h>
 #include "vault.h"
 
 #define APP_NAME    "TPDV"
@@ -60,7 +63,33 @@ int main(int argc, char *argv[]) {
 		vault = vault_change_password(vault, "newpassword");
 		vault_print(vault);
 
-		// Compare digest
+		// Compare digest - test case
+		if (argc == 4 && strcmp(argv[1], "-d") == 0) {
+			size_t user_digest_length = strlen(argv[3]);
+			if (user_digest_length != SHA256_DIGEST_SIZE * 2) {
+				printf("Invalid input: SHA-256 digest must be %d characters long\n", SHA256_DIGEST_SIZE * 2);
+				return 1;
+			}
+
+			vault_entry_t* entry_to_digest = vault_get_entry_by_name(vault, argv[2]);
+			
+			if (entry_to_digest != NULL) {
+				printf("Found entry:\n");
+				printf(" Name: %s\n", entry_to_digest->name);
+				printf(" Data: %s\n", entry_to_digest->data);
+				printf(" Size: %zu\n",entry_to_digest->size);
+			} else {
+				printf("Entry not found.\n");
+				return 1;
+			}
+
+			int comparison_result = verify_vault_entry_integrity(entry_to_digest, argv[3]);
+			if (comparison_result == 0) {
+        		printf("Digests match!\n");
+    		} else {
+        		printf("Digests do not match\n");
+    		}		
+		}
 
 	} else {
 		printf("Authentication failed\n");
@@ -71,7 +100,7 @@ int main(int argc, char *argv[]) {
 	char buffer[vault_total_size(vault)];
 	size_t sz = vault_serialize(vault, buffer);
 	printf("Serialized %d bytes to %s\n", sz, vault->filename);
-	hexdump(buffer, sz);	
+	hexdump(buffer, sz);
 	FILE* file = fopen(vault->filename, "wb");
 	fwrite(buffer, 1, sz, file);
 	fclose(file);
