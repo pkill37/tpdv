@@ -29,39 +29,27 @@
  *
  */
 
+#include "Enclave2.h"
 
 #include <stdarg.h>
-#include <stdio.h>      /* vsnprintf */
+#include <stdio.h> /* vsnprintf */
 
-#include "Enclave2.h"
-#include "Enclave2_t.h"  /* e1_print_string */
+#include "Enclave2_t.h" /* e1_print_string */
 
-/* 
- * printf: 
+/*
+ * printf:
  *   Invokes OCALL to display the enclave buffer to the terminal.
  */
-int printf(const char *fmt, ...)
-{
-  char buf[BUFSIZ] = { '\0' };
+int printf(const char *fmt, ...) {
+  char buf[BUFSIZ] = {'\0'};
   va_list ap;
 
-  va_start(ap,fmt);
-  (void)vsnprintf(buf,BUFSIZ,fmt, ap);
+  va_start(ap, fmt);
+  (void)vsnprintf(buf, BUFSIZ, fmt, ap);
   va_end(ap);
   ocall_e2_print_string(buf);
   return 0;
 }
-
-
-/*
- * ECALL (it just prints a string)
- */
-
-void e2_printf_hello_world(void)
-{
-  printf("Hello from enclave 2\n");
-}
-
 
 /*
  * DH key exchange data (4 more ECALLs)
@@ -72,28 +60,23 @@ static sgx_key_128bit_t e2_aek;
 static sgx_dh_session_enclave_identity_t e2_initiator_identity;
 
 // step 2
-void e2_init_session(sgx_status_t *dh_status)
-{
-  *dh_status = sgx_dh_init_session(SGX_DH_SESSION_RESPONDER,&e2_session);
+void e2_init_session(sgx_status_t *dh_status) {
+  *dh_status = sgx_dh_init_session(SGX_DH_SESSION_RESPONDER, &e2_session);
 }
 
 // step 3
-void e2_create_message1(sgx_dh_msg1_t *msg1,sgx_status_t *dh_status)
-{
-  *dh_status = sgx_dh_responder_gen_msg1(msg1,&e2_session);
+void e2_create_message1(sgx_dh_msg1_t *msg1, sgx_status_t *dh_status) {
+  *dh_status = sgx_dh_responder_gen_msg1(msg1, &e2_session);
 }
 
 // step 7
-void e2_process_message2(const sgx_dh_msg2_t *msg2,sgx_dh_msg3_t *msg3,sgx_status_t *dh_status)
-{
-  *dh_status = sgx_dh_responder_proc_msg2(msg2,msg3,&e2_session,&e2_aek,&e2_initiator_identity);
+void e2_process_message2(const sgx_dh_msg2_t *msg2, sgx_dh_msg3_t *msg3, sgx_status_t *dh_status) {
+  *dh_status = sgx_dh_responder_proc_msg2(msg2, msg3, &e2_session, &e2_aek, &e2_initiator_identity);
 }
 
 // show key
-void e2_show_secret_key(void)
-{
+void e2_show_secret_key(void) {
   printf("Enclave 2 AEK:");
-  for(int i = 0;i < 16;i++)
-    printf(" %02X",0xFF & (int)e2_aek[i]);
+  for (int i = 0; i < 16; i++) printf(" %02X", 0xFF & (int)e2_aek[i]);
   printf("\n");
 }

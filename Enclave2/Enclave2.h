@@ -29,12 +29,12 @@
  *
  */
 
-
 #ifndef _ENCLAVE2_H_
 #define _ENCLAVE2_H_
 
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
+
 #include "sgx_dh.h"
 
 #if defined(__cplusplus)
@@ -42,10 +42,9 @@ extern "C" {
 #endif
 
 int printf(const char *fmt, ...);
-void e2_printf_hello_world(void);
 void e2_init_session(sgx_status_t *dh_status);
-void e2_generate_message1(sgx_dh_msg1_t *msg1,sgx_status_t *dh_status);
-void e2_process_message2(const sgx_dh_msg2_t *msg2,sgx_dh_msg3_t *msg3,sgx_status_t *dh_status);
+void e2_generate_message1(sgx_dh_msg1_t *msg1, sgx_status_t *dh_status);
+void e2_process_message2(const sgx_dh_msg2_t *msg2, sgx_dh_msg3_t *msg3, sgx_status_t *dh_status);
 void e2_show_secret_key(void);
 
 #if defined(__cplusplus)

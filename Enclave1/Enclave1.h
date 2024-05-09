@@ -29,23 +29,23 @@
  *
  */
 
-
 #ifndef _ENCLAVE1_H_
 #define _ENCLAVE1_H_
 
-#include <stdlib.h>
 #include <assert.h>
+#include <stdlib.h>
+
 #include "sgx_dh.h"
+#include "sgx_tseal.h"
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-int printf(const char *fmt, ...);
-void e1_printf_hello_world(void);
-void e1_init_session(sgx_status_t *dh_status);
-void e1_process_message1(const sgx_dh_msg1_t *msg1,sgx_dh_msg2_t *msg2,sgx_status_t *dh_status);
-void e1_process_message3(const sgx_dh_msg3_t *msg3,sgx_status_t *dh_status);
+int printf(const char* fmt, ...);
+void e1_init_session(sgx_status_t* dh_status);
+void e1_process_message1(const sgx_dh_msg1_t* msg1, sgx_dh_msg2_t* msg2, sgx_status_t* dh_status);
+void e1_process_message3(const sgx_dh_msg3_t* msg3, sgx_status_t* dh_status);
 void e1_show_secret_key(void);
 char* getSubstring(const char* buffer, int start, int length);
 sgx_status_t seal_vault(const char* vault, size_t vault_size, sgx_sealed_data_t* sealed_data, size_t sealed_size);

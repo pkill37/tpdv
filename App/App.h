@@ -29,18 +29,17 @@
  *
  */
 
-
 #ifndef _APP_H_
 #define _APP_H_
 
 #include <assert.h>
+#include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <stdarg.h>
 
-#include "sgx_error.h"       /* sgx_status_t */
-#include "sgx_eid.h"     /* sgx_enclave_id_t */
 #include "sgx_dh.h"
+#include "sgx_eid.h"   /* sgx_enclave_id_t */
+#include "sgx_error.h" /* sgx_status_t */
 
 #define ENCLAVE1_FILENAME "enclave1.signed.so"
 #define ENCLAVE2_FILENAME "enclave2.signed.so"

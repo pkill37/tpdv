@@ -36,7 +36,6 @@ enclave
   include "sgx_dh.h"
   trusted
   {
-    public void e1_printf_hello_world(void);
     public void e1_init_session([out] sgx_status_t *dh_status);
     public void e1_process_message1([in] const sgx_dh_msg1_t *msg1,[out] sgx_dh_msg2_t *msg2,[out] sgx_status_t *dh_status);
     public void e1_process_message3([in] const sgx_dh_msg3_t *msg3,[out] sgx_status_t *dh_status);
