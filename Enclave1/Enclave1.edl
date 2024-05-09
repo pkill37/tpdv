@@ -41,9 +41,24 @@ enclave
     public void e1_process_message1([in] const sgx_dh_msg1_t *msg1,[out] sgx_dh_msg2_t *msg2,[out] sgx_status_t *dh_status);
     public void e1_process_message3([in] const sgx_dh_msg3_t *msg3,[out] sgx_status_t *dh_status);
     public void e1_show_secret_key(void);
+    public void e1_seal_data(
+      [in, size=data_size] char* data, 
+      size_t data_size
+    );
+    public void e1_unseal_data(
+      [in, size=sealed_data_size] uint8_t* sealed_data, 
+      size_t sealed_data_size,
+      [in, size=32] const char* user_password
+    );
   };
   untrusted
   {
     void ocall_e1_print_string([in, string] const char *str);
+    int ocall_save_vault(
+      [in, size=sealed_size]const uint8_t* sealed_data, 
+      size_t sealed_size,
+      [in, string]const char* filename
+    );
+    
   };
 };
