@@ -199,25 +199,48 @@ void e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* u
   // Print the result
   snprintf(message, sizeof(message), "First 32 characters: %s\n\n\n", buffer);
   ocall_e1_print_string(message);
+
+  // Calculate the starting position of the password field
+  const uint8_t *start_ptr = unsealed_data + 38;  
+  const char *format_string = "%02x ";  
+  int bytes_printed = 0;
+  // Create buffer with the vault password
+  for (int i = 0; i < 32; i++) {
+    bytes_printed += snprintf(message + bytes_printed, sizeof(message) - bytes_printed, format_string, start_ptr[i]);
+  }
+
+  // Ensure string termination (if there's space left)
+  if (bytes_printed < sizeof(message) - 1) {
+      message[bytes_printed] = '\0';
+  }
+  ocall_e1_print_string(message);
+  ocall_e1_print_string("\n\n");
+
 */
 
   ocall_e1_print_string("Unseal success\n");
-
-  size_t array_size = sizeof(unsealed_data) / sizeof(unsealed_data[0]);
-  snprintf(message, sizeof(message), "Size of unsealed data: %zu\n\n\n", array_size);
-  ocall_e1_print_string(message);
 
   //check password
   char *unsealed_data_char = (char *)unsealed_data;
   unsealed_data_char[31] = '\0';
 
-  char* vault_password = getSubstring(unsealed_data_char, 38, 32);
-  //print pw
-  const int num_chars_to_print = 120;
-  char buffer[num_chars_to_print + 1];
-  snprintf(buffer, sizeof(buffer), "%.*s", num_chars_to_print, vault_password);
-  snprintf(message, sizeof(message), "unsealed vault password: %s\n\n\n", buffer);
-  ocall_e1_print_string(message);
+
+  ocall_e1_print_string("PRINTING RAW DATA: \n\n");
+  
+  // Calculate the starting position of the password field
+  const char *start_ptr = (const char *)(unsealed_data + 38);  
+
+  // Create buffer for the vault password (with space for null terminator)
+  char vault_password[33] = {0};
+  int bytes_printed = 0;
+  for (int i = 0; i < 32; i++) {
+      bytes_printed += snprintf(vault_password + bytes_printed, sizeof(vault_password) - bytes_printed, "%c", start_ptr[i]);
+  }
+
+  /*
+  ocall_e1_print_string(vault_password);
+  ocall_e1_print_string("\n\n");
+  */
 
 	if (strcmp(vault_password, user_password) != 0) {
 		ocall_e1_print_string("Wrong password, unseal aborted\n");
