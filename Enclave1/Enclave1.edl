@@ -58,6 +58,10 @@ enclave
       size_t sealed_size,
       [in, string]const char* filename
     );
+    int ocall_load_vault(
+      [in, size=unsealed_size]uint8_t* unsealed_data, 
+      size_t unsealed_size
+    );
     
   };
 };

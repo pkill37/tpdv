@@ -40,7 +40,6 @@
 #include "sgx_trts.h"
 #include "sgx_tseal.h"
 
-sgx_status_t status;
 int ret;
 
 /*
@@ -142,7 +141,7 @@ void e1_seal_data(char* data, size_t data_size) {
   char message[50];
   char* filename = getSubstring(data, 6, 32);
 
-  status = ocall_save_vault(&ret, sealed_data, sealed_size, filename);
+  sgx_status_t status = ocall_save_vault(&ret, sealed_data, sealed_size, filename);
   free(sealed_data);
   free(filename);
   if (ret != 0 || status != 0) {
@@ -199,18 +198,14 @@ void e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* u
     if (bytes_printed < sizeof(message) - 1) {
         message[bytes_printed] = '\0';
     }
+
+    ocall_e1_print_string("PRINTING RAW DATA: \n\n");
+
     ocall_e1_print_string(message);
     ocall_e1_print_string("\n\n");
-
   */
 
   ocall_e1_print_string("Unseal success\n");
-
-  // check password
-  char* unsealed_data_char = (char*)unsealed_data;
-  unsealed_data_char[31] = '\0';
-
-  ocall_e1_print_string("PRINTING RAW DATA: \n\n");
 
   // Calculate the starting position of the password field
   const char* start_ptr = (const char*)(unsealed_data + 38);
@@ -222,16 +217,21 @@ void e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* u
     bytes_printed +=
         snprintf(vault_password + bytes_printed, sizeof(vault_password) - bytes_printed, "%c", start_ptr[i]);
   }
-
-  /*
+  
   ocall_e1_print_string(vault_password);
   ocall_e1_print_string("\n\n");
-  */
 
   if (strcmp(vault_password, user_password) != 0) {
     ocall_e1_print_string("Wrong password, unseal aborted\n");
     return;
   }
+
+  sgx_status_t status = ocall_load_vault(&ret, unsealed_data, unsealed_size);
+	if (ret != 0 || status != 0) {
+		return;
+	}
+
+  free(unsealed_data);
 
   snprintf(message, sizeof(message), "Vault unsealed: %zu bytes\n\n", unsealed_size);
   ocall_e1_print_string(message);

@@ -49,6 +49,8 @@
 #define APP_NAME "TPDV"
 #define APP_VERSION "1.0.0"
 
+vault_t* loaded_vault = NULL;
+
 void hexdump(const void *data, size_t size) {
   char ascii[17];
   size_t i, j;
@@ -270,13 +272,29 @@ int ocall_save_vault(const uint8_t *sealed_data, const size_t sealed_size, const
 }
 
 int ocall_load_vault(uint8_t *unsealed_data, const size_t unsealed_size) {
-  const int num_chars_to_print = 32;
-  char buffer[num_chars_to_print + 1];
-  snprintf(buffer, sizeof(buffer), "%.*s", num_chars_to_print, unsealed_data);
-  // Print the result
-  printf("First 32 characters: %s\n\n\n", buffer);
-
+  vault_t* loaded_vault = vault_deserialize(unsealed_data,unsealed_size);
+  if(loaded_vault == NULL){
+    printf("Vault deserialization failed\n");
+    return 1;
+  }
+  //vault_print crashes when called from the switch case (maybe because of some sort of concurrency?), but it works fine here
+  vault_print(loaded_vault);
+  //printf("\n\nDESERIALIZED VAULT: last entry: %s - data: %s\n\n",loaded_vault->head->name,loaded_vault->head->data);
   return 0;
+}
+
+void print_help() {
+    printf("Usage: <program_name> [options]\n");
+    printf("Options:\n");
+    printf("-h\t\tShow help menu\n");
+    printf("-d <vault_name> <password> <digest>\tCompare digest with file in vault\n");
+    printf("-x <vault_name> <password>\t\tExtract all files from vault\n");
+    printf("-f <vault_name> <password> <file_name>\tExtract file from vault\n");
+    printf("-v <vault_name> <password> <author>\tCreate a new vault\n");
+    printf("-a <vault_name> <password> <file_name>\tAdd file to vault\n");
+    printf("-l <vault_name> <password>\t\tList all files in vault\n");
+    printf("-p <vault_name> <curr_password> <new_password>\tChange vault password\n");
+    printf("-c <vault_name> <password> <vault2_name>\tClone vault contents\n");
 }
 
 /*
@@ -299,16 +317,158 @@ int SGX_CDECL main(int argc, char *argv[]) {
     print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e1_init_session");
     return 1;
   }
+  
+  // New entry point
+
+  int opt;
+  const char *options = "hdxfvalpc";
+
+  if(argc < 2){
+    print_help();
+    return 0;
+  }
+
+  // read user input
+  while ((opt = getopt(argc, argv, options)) != -1) {
+    switch (opt) {
+      // Show help info
+      case 'h':
+        print_help();
+        break;
+
+      // Compare the provided digest with the digest from a file in the vault
+      case 'd':
+        if (optind + 2 >= argc) {
+          printf("Error: Insufficient arguments for option -d\n");
+          printf("-d <vault_name> <password> <digest>\tCompare digest with file in vault\n");
+          exit(EXIT_FAILURE);
+        }
+        printf("Option d - Comparing digest with file in vault\n");
+        // Compare the digest with file in vault
+
+        //check if file exists
+        //check if it is a valid sealed file
+        //load contents into memory
+        //copy code from below
+
+        break;
+
+      // Extract all files from the vault
+      case 'x':
+        if (optind + 1 >= argc) {
+          printf("Error: Insufficient arguments for option -x\n");
+          printf("-d <vault_name> <password> <digest>\tCompare digest with file in vault\n");
+          exit(EXIT_FAILURE);
+        }
+        printf("Option x - Extracting all files from vault\n");
+        // Extract all files from vault
+        break;
+
+      // Extract 1 file from the vault
+      case 'f':
+        if (optind + 2 >= argc) {
+          printf("Error: Insufficient arguments for option -f\n");
+          printf("-f <vault_name> <password> <file_name>\tExtract file from vault\n");
+          exit(EXIT_FAILURE);
+        }
+        printf("Option f - Extracting file from vault\n");
+        // Extract file from vault
+        break;
+
+      // Create a vault
+      case 'v':
+        if (optind + 2 >= argc) {
+          printf("Error: Insufficient arguments for option -v\n");
+          printf("-v <vault_name> <password> <author>\tCreate a new vault\n");
+          exit(EXIT_FAILURE);
+        }
+        printf("Option v - Creating a new vault\n");
+        // Create a new vault
+        break;
+
+      // Add item to the vault
+      case 'a':
+        if (optind + 2 >= argc) {
+          printf("Error: Insufficient arguments for option -a\n");
+          printf("-a <vault_name> <password> <file_name>\tAdd file to vault\n");
+          exit(EXIT_FAILURE);
+        }
+        printf("Option a - Adding file to vault\n");
+        // Add file to vault
+        break;
+
+      // List all files from the vault
+      case 'l':{
+        if (optind + 1 >= argc) {
+          printf("Error: Insufficient arguments for option -l\n");
+          printf("-l <vault_name> <password>\t\tList all files in vault\n");
+          exit(EXIT_FAILURE);
+        }
+
+        const char* user_password = argv[3];
+        const char* filename = argv[2];
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) >= 32) {
+          printf("Invalid password\n");
+          exit(EXIT_FAILURE);
+        }
+
+        // List all files in vault
+        size_t file_size;
+        uint8_t *vault_file_contents = load_vault_contents(filename, &file_size);
+
+        if (vault_file_contents != NULL) {
+          printf("File loaded successfully!\n");
+          printf("File size: %zu bytes\n", file_size);
+
+          // Unseal vault
+          e1_unseal_data(global_eid1, vault_file_contents, file_size, user_password);
+
+          /*
+           Implement threading to synchronize with the asynchronous ocall and ensure the vault global variable is populated
+           Perform ecall error validation prior to the synchronization wait
+          */
+
+          free(vault_file_contents);
+        }
+        break;
+      }
+
+      // Change vault password
+      case 'p':
+        if (optind + 2 >= argc) {
+          printf("Error: Insufficient arguments for option -p\n");
+          printf("-p <vault_name> <curr_password> <new_password>\tChange vault password\n");
+          exit(EXIT_FAILURE);
+        }
+        printf("Option p - Changing vault password\n");
+        // Change vault password
+        break;
+
+      // Clone vault contents
+      case 'c':
+        if (optind + 1 >= argc) {
+          printf("Error: Insufficient arguments for option -c\n");
+          printf("-c <vault_name> <password> <vault2_name>\tClone vault contents\n");
+          exit(EXIT_FAILURE);
+        }
+        printf("Option c - Cloning vault contents\n");
+        // Clone vault contents
+        break;
+
+      default:
+        printf("Unknown option\n");
+        print_help();
+        exit(EXIT_FAILURE);
+    }
+  }
+
+  return 0;
 
   // Create a new vault
   // Read from input
   char user_password[] = "password";
   vault_t *vault = vault_new("vault.dat", user_password, "author");
 
-  char serialized_vault[vault_total_size(vault)];
-  size_t serialized_vault_size = vault_serialize(vault, serialized_vault);
-
-  e1_seal_data(global_eid1, serialized_vault, serialized_vault_size);
   vault_print(vault);
   if (vault_authenticate(vault, user_password)) {
     printf("Authenticated\n");
@@ -317,6 +477,9 @@ int SGX_CDECL main(int argc, char *argv[]) {
     vault = vault_add(vault, "entry2", "data2");
     vault_print(vault);
 
+    //serialize vault with data and seal it
+    char serialized_vault[vault_total_size(vault)];
+    size_t serialized_vault_size = vault_serialize(vault, serialized_vault);
     e1_seal_data(global_eid1, serialized_vault, serialized_vault_size);
 
     // wait for vault to be unsealed and serialize Vault object -
@@ -371,12 +534,12 @@ int SGX_CDECL main(int argc, char *argv[]) {
     // Unseal vault with data - only unseals 8 bytes for some reason
     e1_unseal_data(global_eid1, buffer, sealed_data_size, user_password);
 
-    // DH to exchange keys - and transfer the vault from enclave1 to enclave1
-    // using uint8_t* (or other suitable data structure)
-
     // Clean up
     free(buffer);
     fclose(fp);
+
+    // DH to exchange keys - and transfer the vault from enclave1 to enclave1
+    // using uint8_t* (or other suitable data structure)
 
     // Extract entry
     if (argc == 3 && strcmp(argv[1], "-x") == 0) {

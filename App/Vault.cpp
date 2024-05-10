@@ -110,6 +110,70 @@ size_t vault_serialize(const vault_t* vault, char* buffer) {
   return offset;
 }
 
+// Deserialize a VaultEntry
+vault_entry_t *vault_entry_deserialize(const uint8_t *buffer, size_t *offset) {
+  vault_entry_t *entry = (vault_entry_t*)malloc(sizeof(vault_entry_t));
+  if (entry == NULL) {
+    fprintf(stderr, "Error allocating memory for vault_entry_t\n");
+    return NULL;
+  }
+
+  memcpy(entry->name, buffer + *offset, sizeof(entry->name));
+  *offset += sizeof(entry->name);
+  memcpy(entry->data, buffer + *offset, VAULT_ENTRY_SIZE);
+  *offset += VAULT_ENTRY_SIZE;
+  memcpy(&entry->size, buffer + *offset, sizeof(entry->size));
+  *offset += sizeof(entry->size);
+  entry->next = NULL;
+
+  return entry;
+}
+
+// Deserialize a Vault
+vault_t *vault_deserialize(const uint8_t *buffer, size_t buffer_size) {
+  vault_t *vault = (vault_t*)malloc(sizeof(vault_t));
+  if (vault == NULL) {
+    fprintf(stderr, "Error allocating memory for vault_t\n");
+    return NULL;
+  }
+
+  size_t offset = 0;
+
+  memcpy(vault->nonce, buffer + offset, sizeof(vault->nonce));
+  offset += sizeof(vault->nonce);
+  memcpy(vault->magic, buffer + offset, sizeof(vault->magic));
+  offset += sizeof(vault->magic);
+  memcpy(vault->filename, buffer + offset, sizeof(vault->filename));
+  offset += sizeof(vault->filename);
+  memcpy(vault->password, buffer + offset, sizeof(vault->password));
+  offset += sizeof(vault->password);
+  memcpy(vault->author, buffer + offset, sizeof(vault->author));
+  offset += sizeof(vault->author);
+  memcpy(&vault->size, buffer + offset, sizeof(vault->size));
+  offset += sizeof(vault->size);
+
+  // Deserialize VaultEntries
+  vault->head = NULL;
+  vault_entry_t **current_entry_ptr = &vault->head;
+
+  while (offset < buffer_size) {
+    // Check if the next entry appears empty (e.g., name and data filled with zeros)
+    if (buffer[offset + 1] == 0) {
+      break; // No more entries to deserialize
+    }
+
+    *current_entry_ptr = vault_entry_deserialize(buffer, &offset);
+    if (*current_entry_ptr == NULL) {
+      // Error in deserializing a vault entry, free the partially deserialized vault
+      vault_free(vault); 
+      return NULL;
+    }
+    current_entry_ptr = &((*current_entry_ptr)->next);
+  }
+
+  return vault;
+}
+
 void vault_free(vault_t* vault) {
   vault_entry_t* entry = vault->head;
   while (entry != NULL) {
@@ -316,4 +380,49 @@ int write_vault_entry_data_to_file(const vault_entry_t* entry) {
 
   fclose(fp);
   return 0;
+}
+
+uint8_t *load_vault_contents(const char *filename, size_t *file_size) {
+  if (filename == NULL) {
+    fprintf(stderr, "Error: Invalid filename (NULL)\n");
+    return NULL;
+  }
+
+  // Validate filename length
+  if (strlen(filename) >= 32) {
+    fprintf(stderr, "Error: Filename cannot exceed %d characters (including null terminator).\n", 32 - 1);
+    return NULL;
+  }
+
+  FILE *fp = fopen(filename, "rb");
+  if (fp == NULL) {
+    fprintf(stderr, "Error: Could not open file '%s'\n", filename);
+    return NULL;
+  }
+
+  // Get file size
+  fseek(fp, 0, SEEK_END);
+  *file_size = ftell(fp);
+  rewind(fp);
+
+  // Allocate memory for file contents
+  uint8_t *data = (uint8_t *)malloc(*file_size);
+  if (data == NULL) {
+    fprintf(stderr, "Error: Memory allocation failed\n");
+    fclose(fp);
+    return NULL;
+  }
+
+  // Read file contents into the array
+  size_t bytes_read = fread(data, 1, *file_size, fp);
+  if (bytes_read != *file_size) {
+    fprintf(stderr, "Error: Could not read entire file\n");
+    free(data);
+    fclose(fp);
+    return NULL;
+  }
+
+  fclose(fp);
+
+  return data;
 }

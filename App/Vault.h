@@ -34,6 +34,9 @@ vault_t* vault_add(vault_t* vault, const char* filename, const char* data);
 vault_t* vault_change_password(vault_t* vault, const char* password);
 size_t vault_entry_serialize(const vault_entry_t* entry, char* buffer);
 size_t vault_serialize(const vault_t* vault, char* buffer);
+vault_entry_t *vault_entry_deserialize(const uint8_t *buffer, size_t *offset);
+vault_t *vault_deserialize(const uint8_t *buffer, size_t buffer_size);
+uint8_t *load_vault_contents(const char *filename, size_t *file_size);
 
 size_t vault_total_size(const vault_t* vault);
 int vault_authenticate(const vault_t* vault, const char* password);
