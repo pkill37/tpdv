@@ -266,19 +266,17 @@ int ocall_save_vault(const uint8_t *sealed_data, const size_t sealed_size, const
     fclose(file);
     return 1;
   }
-
+  
   fclose(file);
   return 0;
 }
 
 int ocall_load_vault(uint8_t *unsealed_data, const size_t unsealed_size) {
-  vault_t* loaded_vault = vault_deserialize(unsealed_data,unsealed_size);
+  loaded_vault = vault_deserialize(unsealed_data,unsealed_size);
   if(loaded_vault == NULL){
     printf("Vault deserialization failed\n");
     return 1;
   }
-  //vault_print crashes when called from the switch case (maybe because of some sort of concurrency?), but it works fine here
-  vault_print(loaded_vault);
   //printf("\n\nDESERIALIZED VAULT: last entry: %s - data: %s\n\n",loaded_vault->head->name,loaded_vault->head->data);
   return 0;
 }
@@ -302,7 +300,7 @@ void print_help() {
  */
 
 int SGX_CDECL main(int argc, char *argv[]) {
-  sgx_status_t ret, dh_status;
+  sgx_status_t ret, dh_status, ecall_status;
   sgx_dh_msg1_t msg1;
   sgx_dh_msg2_t msg2;
   sgx_dh_msg3_t msg3;
@@ -412,29 +410,36 @@ int SGX_CDECL main(int argc, char *argv[]) {
           exit(EXIT_FAILURE);
         }
 
-        // List all files in vault
+        // Read vault file
         size_t file_size;
         uint8_t *vault_file_contents = load_vault_contents(filename, &file_size);
 
-        if (vault_file_contents != NULL) {
-          printf("File loaded successfully!\n");
-          printf("File size: %zu bytes\n", file_size);
-
-          // Unseal vault
-          e1_unseal_data(global_eid1, vault_file_contents, file_size, user_password);
-
-          /*
-           Implement threading to synchronize with the asynchronous ocall and ensure the vault global variable is populated
-           Perform ecall error validation prior to the synchronization wait
-          */
-
-          free(vault_file_contents);
+        if (vault_file_contents == NULL) {
+          fprintf(stderr, "Error: Unable to open vault file '%s'.",filename);
+          exit(EXIT_FAILURE);
         }
+
+        printf("File loaded successfully!\n");
+        printf("File size: %zu bytes\n", file_size);
+
+        // Unseal vault
+        e1_unseal_data(global_eid1, &ret, vault_file_contents, file_size, user_password);
+        if (ret != SGX_SUCCESS) {
+          fprintf(stderr, "Error: Failed to unseal vault data.\n");
+          free(vault_file_contents);
+          exit(EXIT_FAILURE);
+        }
+          
+        vault_print(loaded_vault);
+
+        free(loaded_vault);
+        free(vault_file_contents);
+        
         break;
       }
 
       // Change vault password
-      case 'p':
+      case 'p':{
         if (optind + 2 >= argc) {
           printf("Error: Insufficient arguments for option -p\n");
           printf("-p <vault_name> <curr_password> <new_password>\tChange vault password\n");
@@ -442,7 +447,59 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
         printf("Option p - Changing vault password\n");
         // Change vault password
+        const char* user_password = argv[3];
+        const char* new_user_password = argv[4];
+        const char* filename = argv[2];
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) >= 32) {
+          printf("Invalid password\n");
+          exit(EXIT_FAILURE);
+        }
+
+        if (new_user_password == NULL || strlen(new_user_password) < 1 || strlen(new_user_password) >= 32) {
+          fprintf(stderr, "Error: Password too long (max 31 characters).\n");
+          exit(EXIT_FAILURE);
+        }
+
+        // Read vault file
+        size_t file_size;
+        uint8_t *vault_file_contents = load_vault_contents(filename, &file_size);
+
+        if (vault_file_contents == NULL) {
+          fprintf(stderr, "Error: Unable to open vault file '%s'.\n",filename);
+          exit(EXIT_FAILURE);
+        }
+
+        printf("File loaded successfully!\n");
+        printf("File size: %zu bytes\n", file_size);
+        
+        // Unseal vault
+        ecall_status = e1_unseal_data(global_eid1, &ret, vault_file_contents, file_size, user_password);
+        if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
+          fprintf(stderr, "Error: Failed to unseal vault data.\n");
+          free(vault_file_contents);
+          exit(EXIT_FAILURE);
+        }
+        
+        loaded_vault = vault_change_password(loaded_vault, new_user_password);
+        
+        // Prepare and seal vault data for storage
+        char serialized_vault[vault_total_size(loaded_vault)];
+        size_t serialized_vault_size = vault_serialize(loaded_vault, serialized_vault);
+
+        ecall_status = e1_seal_data(global_eid1, &ret, serialized_vault, serialized_vault_size);
+        if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
+          fprintf(stderr, "Error: Failed to seal vault data.\n");
+          free(vault_file_contents);
+          exit(EXIT_FAILURE);
+        }
+
+        printf("Password updated successfully.\n");
+
+        free(loaded_vault);
+        free(vault_file_contents);
+
         break;
+      }
 
       // Clone vault contents
       case 'c':
@@ -480,7 +537,7 @@ int SGX_CDECL main(int argc, char *argv[]) {
     //serialize vault with data and seal it
     char serialized_vault[vault_total_size(vault)];
     size_t serialized_vault_size = vault_serialize(vault, serialized_vault);
-    e1_seal_data(global_eid1, serialized_vault, serialized_vault_size);
+    e1_seal_data(global_eid1, &ret, serialized_vault, serialized_vault_size);
 
     // wait for vault to be unsealed and serialize Vault object -
     // ocall_save_vault
@@ -532,7 +589,7 @@ int SGX_CDECL main(int argc, char *argv[]) {
     printf("File size: %zu bytes\n", sealed_data_size);
 
     // Unseal vault with data - only unseals 8 bytes for some reason
-    e1_unseal_data(global_eid1, buffer, sealed_data_size, user_password);
+    e1_unseal_data(global_eid1, &ret, buffer, sealed_data_size, user_password);
 
     // Clean up
     free(buffer);

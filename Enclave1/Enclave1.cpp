@@ -126,36 +126,45 @@ sgx_status_t unseal(sgx_sealed_data_t* sealed_data, size_t sealed_size, uint8_t*
   return status;
 }
 
-void e1_seal_data(char* data, size_t data_size) {
+sgx_status_t e1_seal_data(char* data, size_t data_size) {
   uint32_t sealed_size = sgx_calc_sealed_data_size(0, data_size);
   uint8_t* sealed_data = (uint8_t*)malloc(sealed_size);
+
+  if (sealed_data == NULL) {
+    ocall_e1_print_string("Error sealing the valut: Out of memory\n");
+    return SGX_ERROR_OUT_OF_MEMORY;
+  }
 
   sgx_status_t sealing_status = seal_vault(data, data_size, (sgx_sealed_data_t*)sealed_data, sealed_size);
 
   if (sealing_status != 0) {
     free(sealed_data);
     ocall_e1_print_string("Failed to create new vault\n");
-    return;
+    return sealing_status;
   }
 
   char message[50];
   char* filename = getSubstring(data, 6, 32);
+
+  if(filename == NULL){
+    return SGX_ERROR_UNEXPECTED;
+  }
 
   sgx_status_t status = ocall_save_vault(&ret, sealed_data, sealed_size, filename);
   free(sealed_data);
   free(filename);
   if (ret != 0 || status != 0) {
     ocall_e1_print_string("Failed to write the sealed vault to file\n");
-    return;
+    return status;
   }
 
   snprintf(message, sizeof(message), "Vault successfully created: %u bytes\n\n", sealed_size);
 
   ocall_e1_print_string(message);
-  return;
+  return SGX_SUCCESS;
 }
 
-void e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* user_password) {
+sgx_status_t e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* user_password) {
   char message[5000];
 
   size_t unsealed_size = sgx_calc_sealed_data_size(0, sealed_data_size);
@@ -163,17 +172,16 @@ void e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* u
 
   if (unsealed_data == NULL) {
     ocall_e1_print_string("Error unsealing the valut: Out of memory\n");
-    return;
+    return SGX_ERROR_OUT_OF_MEMORY;
   }
 
   sgx_status_t unsealing_status =
       unseal((sgx_sealed_data_t*)sealed_data, sealed_data_size, unsealed_data, unsealed_size);
 
-  if (unsealing_status == SGX_ERROR_INVALID_PARAMETER) {
-    free(sealed_data);
+  if (unsealing_status != SGX_SUCCESS) {
     snprintf(message, sizeof(message), "Failed to unseal vault: %d\n", unsealing_status);
     ocall_e1_print_string(message);
-    return;
+    return unsealing_status;
   }
 
   /* DEBUG
@@ -223,16 +231,18 @@ void e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* u
 
   if (strcmp(vault_password, user_password) != 0) {
     ocall_e1_print_string("Wrong password, unseal aborted\n");
-    return;
+    return SGX_ERROR_UNEXPECTED;
   }
 
   sgx_status_t status = ocall_load_vault(&ret, unsealed_data, unsealed_size);
 	if (ret != 0 || status != 0) {
-		return;
+		return SGX_ERROR_UNEXPECTED;
 	}
 
   free(unsealed_data);
 
   snprintf(message, sizeof(message), "Vault unsealed: %zu bytes\n\n", unsealed_size);
   ocall_e1_print_string(message);
+
+  return SGX_SUCCESS;
 }
