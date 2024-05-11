@@ -1,5 +1,6 @@
 #pragma once
 
+#include "sgx_urts.h"
 #include "stdint.h"
 #include "stdlib.h"
 
@@ -45,5 +46,9 @@ void vault_entry_print(const vault_entry_t* entry);
 
 vault_entry_t* vault_get_entry_by_name(vault_t* vault, const char* name);
 int verify_vault_entry_integrity(vault_entry_t* entry, const char* user_digest);
+int calculate_entry_digest(vault_entry_t* entry);
 int write_vault_entries_to_files(const vault_t* vault);
 int write_vault_entry_data_to_file(const vault_entry_t* entry);
+int process_vault(sgx_enclave_id_t global_eid1, const char* filename, const char* user_password);
+int read_and_parse_file(const char *filename, char *parsed_content);
+char *get_filename(const char *path);

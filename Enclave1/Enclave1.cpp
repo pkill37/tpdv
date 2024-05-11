@@ -231,11 +231,13 @@ sgx_status_t e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const
 
   if (strcmp(vault_password, user_password) != 0) {
     ocall_e1_print_string("Wrong password, unseal aborted\n");
+    free(unsealed_data);
     return SGX_ERROR_UNEXPECTED;
   }
 
   sgx_status_t status = ocall_load_vault(&ret, unsealed_data, unsealed_size);
 	if (ret != 0 || status != 0) {
+    free(unsealed_data);
 		return SGX_ERROR_UNEXPECTED;
 	}
 

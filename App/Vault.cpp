@@ -3,6 +3,8 @@
 #include <openssl/err.h>
 #include <openssl/evp.h>
 
+#include "Enclave1_u.h"
+#include "sgx_urts.h"
 #include "stdint.h"
 #include "stdio.h"
 #include "stdlib.h"
@@ -52,7 +54,8 @@ int vault_authenticate(const vault_t* vault, const char* password) { return strc
 
 vault_t* vault_add(vault_t* vault, const char* filename, const char* data) {
   vault_entry_t* entry = (vault_entry_t*)malloc(sizeof(vault_entry_t));
-  strcpy(entry->name, filename);
+  char *parsed_filename = get_filename(filename);
+  strcpy(entry->name, parsed_filename);
   strcpy(entry->data, data);
   entry->size = strlen(data);
   entry->next = vault->head;
@@ -274,8 +277,9 @@ static int compare_digests(const char* user_digest, const unsigned char* calcula
 // Find a vault entry by name
 vault_entry_t* vault_get_entry_by_name(vault_t* vault, const char* name) {
   vault_entry_t* current = vault->head;
+  char *parsed_filename = get_filename(name);
   while (current != NULL) {
-    if (strcmp(current->name, name) == 0) {
+    if (strcmp(current->name, parsed_filename) == 0) {
       return current;
     }
     current = current->next;
@@ -336,6 +340,49 @@ int verify_vault_entry_integrity(vault_entry_t* entry, const char* user_digest) 
   CRYPTO_cleanup_all_ex_data();
 
   return comparison_result;
+}
+
+int calculate_entry_digest(vault_entry_t* entry) {
+  // Initialize OpenSSL
+  init_openssl();
+  const EVP_MD* digest = get_digest("sha256");
+  if (!digest) {
+    return handle_errors(NULL);
+  }
+
+  // Create digest context
+  EVP_MD_CTX* mdctx = create_digest_ctx(digest);
+  if (!mdctx) {
+    return handle_errors(NULL);
+  }
+
+  // Process entry data and update digest
+  if (process_data(entry->data, entry->size, mdctx) != 1) {
+    return handle_errors(mdctx);
+  }
+
+  // Finalize the digest for the given file
+  unsigned char calculated_digest[EVP_MAX_MD_SIZE];
+  unsigned int md_len;
+  if (get_message_digest(mdctx, calculated_digest, &md_len) != 1) {
+    return handle_errors(mdctx);
+  } 
+
+  // Convert the calculated digest to a hex string for user display
+  char calculated_digest_hex[EVP_MAX_MD_SIZE * 2 + 1];
+  for (int i = 0; i < md_len; i++) {
+    sprintf(calculated_digest_hex + i * 2, "%02x", calculated_digest[i]);
+  }
+  calculated_digest_hex[md_len * 2] = '\0';
+
+  printf("Calculated SHA-256 digest for '%s': %s\n", entry->data, calculated_digest_hex);
+
+  // Clean up
+  EVP_MD_CTX_destroy(mdctx);
+  EVP_cleanup();
+  CRYPTO_cleanup_all_ex_data();
+
+  return 0;
 }
 
 int write_vault_entries_to_files(const vault_t* vault) {
@@ -425,4 +472,87 @@ uint8_t *load_vault_contents(const char *filename, size_t *file_size) {
   fclose(fp);
 
   return data;
+}
+
+int process_vault(sgx_enclave_id_t global_eid1, const char* filename, const char* user_password) {
+  sgx_status_t ret, ecall_status;
+  size_t file_size;
+
+  // Read vault file
+  uint8_t* vault_file_contents = load_vault_contents(filename, &file_size);
+  if (vault_file_contents == NULL) {
+    fprintf(stderr, "Error: Unable to open vault file '%s'.", filename);
+    return EXIT_FAILURE;
+  }
+
+  printf("File loaded successfully!\n");
+  printf("File size: %zu bytes\n", file_size);
+
+  // Unseal vault
+  ecall_status = e1_unseal_data(global_eid1, &ret, vault_file_contents, file_size, user_password);
+  if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
+    fprintf(stderr, "Error: Failed to unseal vault data.\n");
+    free(vault_file_contents);
+    return EXIT_FAILURE;
+  }
+  
+  free(vault_file_contents);
+  return EXIT_SUCCESS;
+}
+
+int read_and_parse_file(const char *filename, char *parsed_content) {
+  FILE *fp;
+  size_t bytes_read;
+
+  fp = fopen(filename, "rb");
+  if (fp == NULL) {
+    fprintf(stderr, "Error: Unable to open file '%s'.\n", filename);
+    return -1;
+  }
+
+  // Check file size and ensure it fits the vault entry structure
+  if (fseek(fp, 0, SEEK_END) != 0) {
+    fprintf(stderr, "Error: Error seeking file position.\n");
+    fclose(fp);
+    return -1;
+  }
+  long file_size = ftell(fp);
+  if (file_size == -1) {
+    fprintf(stderr, "Error: Error getting file size.\n");
+    fclose(fp);
+    return -1;
+  }
+  if (file_size >= VAULT_ENTRY_SIZE) {
+    fprintf(stderr, "Error: File size (%ld bytes) exceeds maximum (%d bytes).\n",file_size, VAULT_ENTRY_SIZE);
+    fclose(fp);
+    return -1;
+  }
+  rewind(fp);
+
+  bytes_read = fread(parsed_content, 1, file_size, fp);
+  if (bytes_read != file_size) {
+    fprintf(stderr, "Error: Error reading from file.\n");
+    fclose(fp);
+    return -1;
+  }
+
+  parsed_content[bytes_read] = '\0';
+
+  fclose(fp);
+
+  return 0; 
+}
+
+char *get_filename(const char *path) {
+  const char *filename = strrchr(path, '/');
+
+  // no path separator (just filename)
+  if (filename == NULL) {
+    filename = path;
+  } else {
+    // Point to the character after the separator
+    filename++;
+  }
+
+  return (char *)filename;
 }

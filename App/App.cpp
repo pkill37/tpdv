@@ -282,17 +282,17 @@ int ocall_load_vault(uint8_t *unsealed_data, const size_t unsealed_size) {
 }
 
 void print_help() {
-    printf("Usage: <program_name> [options]\n");
-    printf("Options:\n");
-    printf("-h\t\tShow help menu\n");
-    printf("-d <vault_name> <password> <digest>\tCompare digest with file in vault\n");
-    printf("-x <vault_name> <password>\t\tExtract all files from vault\n");
-    printf("-f <vault_name> <password> <file_name>\tExtract file from vault\n");
-    printf("-v <vault_name> <password> <author>\tCreate a new vault\n");
-    printf("-a <vault_name> <password> <file_name>\tAdd file to vault\n");
-    printf("-l <vault_name> <password>\t\tList all files in vault\n");
-    printf("-p <vault_name> <curr_password> <new_password>\tChange vault password\n");
-    printf("-c <vault_name> <password> <vault2_name>\tClone vault contents\n");
+  printf("Usage: <program_name> [options]\n");
+  printf("Options:\n");
+  printf("-h\t\tShow help menu\n");
+  printf("-d <vault_name> <password> <digest>\tCompare digest with file in vault\n");
+  printf("-x <vault_name> <password>\t\tExtract all files from vault\n");
+  printf("-f <vault_name> <password> <file_name>\tExtract file from vault\n");
+  printf("-v <vault_name> <password> <author>\tCreate a new vault\n");
+  printf("-a <vault_name> <password> <file_name>\tAdd file to vault\n");
+  printf("-l <vault_name> <password>\t\tList all files in vault\n");
+  printf("-p <vault_name> <curr_password> <new_password>\tChange vault password\n");
+  printf("-c <vault_name> <password> <vault2_name>\tClone vault contents\n");
 }
 
 /*
@@ -335,7 +335,7 @@ int SGX_CDECL main(int argc, char *argv[]) {
         break;
 
       // Compare the provided digest with the digest from a file in the vault
-      case 'd':
+      case 'd':{
         if (optind + 2 >= argc) {
           printf("Error: Insufficient arguments for option -d\n");
           printf("-d <vault_name> <password> <digest>\tCompare digest with file in vault\n");
@@ -344,15 +344,61 @@ int SGX_CDECL main(int argc, char *argv[]) {
         printf("Option d - Comparing digest with file in vault\n");
         // Compare the digest with file in vault
 
-        //check if file exists
-        //check if it is a valid sealed file
-        //load contents into memory
-        //copy code from below
+        const char* user_password = argv[3];
+        const char* filename = argv[2];
+        const char* entryname = argv[4];
+        const char* user_digest = argv[5];
+
+        size_t user_digest_length = strlen(user_digest);
+        printf("\nDigest: %s len: %zu\n",user_digest,user_digest_length);
+
+        if (user_digest_length != SHA256_DIGEST_SIZE * 2) {
+          printf("Invalid input: SHA-256 digest must be %d characters long\n", SHA256_DIGEST_SIZE * 2);
+          return 1;
+        }
+
+        size_t max_creds_length = 31;
+
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) > max_creds_length) {
+          fprintf(stderr, "Error: Incorrect vault password.\n");
+          return EXIT_FAILURE;
+        }
+
+        if (entryname == NULL || strlen(entryname) < 1 || strlen(entryname) > max_creds_length) {
+          fprintf(stderr, "Error: Invalid vault entry name.\n");
+          return EXIT_FAILURE;
+        }
+
+        // unseal vault and load it into RAM
+        if (process_vault(global_eid1, filename, user_password) != EXIT_SUCCESS) {
+          return EXIT_FAILURE;
+        }
+
+        vault_entry_t *entry_to_digest = vault_get_entry_by_name(loaded_vault, entryname);
+
+        if (entry_to_digest != NULL) {
+          printf("Found entry:\n");
+          printf(" Name: %s\n", entry_to_digest->name);
+          printf(" Data: %s\n", entry_to_digest->data);
+          printf(" Size: %zu\n", entry_to_digest->size);
+        } else {
+          fprintf(stderr, "Error: Vault entry not found.\n");
+          return 1;
+        }
+
+        int comparison_result = verify_vault_entry_integrity(entry_to_digest, user_digest);
+        if (comparison_result == 0) {
+          printf("Digests match!\n");
+        } else {
+          fprintf(stderr, "Error: Digests do not match.\n");
+        }
+
+        vault_free(loaded_vault);
 
         break;
-
+      }
       // Extract all files from the vault
-      case 'x':
+      case 'x':{
         if (optind + 1 >= argc) {
           printf("Error: Insufficient arguments for option -x\n");
           printf("-d <vault_name> <password> <digest>\tCompare digest with file in vault\n");
@@ -360,10 +406,39 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
         printf("Option x - Extracting all files from vault\n");
         // Extract all files from vault
+
+        const char* user_password = argv[3];
+        const char* filename = argv[2];
+
+        size_t max_creds_length = 31;
+
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) > max_creds_length) {
+          fprintf(stderr, "Error: Incorrect vault password.\n");
+          return EXIT_FAILURE;
+        }
+
+        // unseal vault and load it into RAM
+        if (process_vault(global_eid1, filename, user_password) != EXIT_SUCCESS) {
+          return EXIT_FAILURE;
+        }
+
+        int write_result = write_vault_entries_to_files(loaded_vault);
+
+        if (write_result == 0) {
+          printf("Vault contents extracted successfully!\n");
+        } else {
+          fprintf(stderr, "Error: There was an error extracting the vault content.\n");
+          vault_free(loaded_vault);
+          return 1;
+        }
+
+        vault_free(loaded_vault);
+
         break;
+      }
 
       // Extract 1 file from the vault
-      case 'f':
+      case 'f':{
         if (optind + 2 >= argc) {
           printf("Error: Insufficient arguments for option -f\n");
           printf("-f <vault_name> <password> <file_name>\tExtract file from vault\n");
@@ -371,10 +446,57 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
         printf("Option f - Extracting file from vault\n");
         // Extract file from vault
+
+        const char* user_password = argv[3];
+        const char* filename = argv[2];
+        const char* entryname = argv[4];
+
+        size_t max_creds_length = 31;
+
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) > max_creds_length) {
+          fprintf(stderr, "Error: Incorrect vault password.\n");
+          return EXIT_FAILURE;
+        }
+
+        if (entryname == NULL || strlen(entryname) < 1 || strlen(entryname) > max_creds_length) {
+          fprintf(stderr, "Error: Invalid vault entry name.\n");
+          return EXIT_FAILURE;
+        }
+
+        // unseal vault and load it into RAM
+        if (process_vault(global_eid1, filename, user_password) != EXIT_SUCCESS) {
+          return EXIT_FAILURE;
+        }
+
+        vault_entry_t *entry_to_extract = vault_get_entry_by_name(loaded_vault, entryname);
+
+        if (entry_to_extract != NULL) {
+          printf("Found entry:\n");
+          printf(" Name: %s\n", entry_to_extract->name);
+          printf(" Data: %s\n", entry_to_extract->data);
+          printf(" Size: %zu\n", entry_to_extract->size);
+        } else {
+          fprintf(stderr, "Error: Vault entry not found.\n");
+          vault_free(loaded_vault);
+          return 1;
+        }
+
+        int write_result = write_vault_entry_data_to_file(entry_to_extract);
+        if (write_result == 0) {
+          printf("Vault entry contents extracted successfully!\n");
+        } else {
+          fprintf(stderr, "Error: There was an error writing to the file.\n");
+          vault_free(loaded_vault);
+          return 1;
+        }
+
+        vault_free(loaded_vault);
+
         break;
+      }
 
       // Create a vault
-      case 'v':
+      case 'v':{
         if (optind + 2 >= argc) {
           printf("Error: Insufficient arguments for option -v\n");
           printf("-v <vault_name> <password> <author>\tCreate a new vault\n");
@@ -382,10 +504,48 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
         printf("Option v - Creating a new vault\n");
         // Create a new vault
+
+        const char* user_password = argv[3];
+        const char* filename = argv[2];
+        const char* author = argv[4];
+
+        size_t max_creds_length = 31;
+
+        if (filename == NULL || strlen(filename) < 1 || strlen(filename) > max_creds_length) {
+          fprintf(stderr, "Error: Filename too long (max %zu characters).\n", max_creds_length);
+          return EXIT_FAILURE;
+        }
+
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) > max_creds_length) {
+          fprintf(stderr, "Error: Incorrect vault password.\n");
+          return EXIT_FAILURE;
+        }
+
+        if (author == NULL || strlen(author) < 1 || strlen(author) > max_creds_length) {
+          fprintf(stderr, "Error: Author name too long (max %zu characters).\n", max_creds_length);
+          return EXIT_FAILURE;
+        }
+
+        vault_t *vault = vault_new(filename, user_password, author);
+
+        //serialize vault and seal it
+        char serialized_vault[vault_total_size(vault)];
+        size_t serialized_vault_size = vault_serialize(vault, serialized_vault);
+        
+        ecall_status = e1_seal_data(global_eid1, &ret, serialized_vault, serialized_vault_size);
+
+        if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
+          fprintf(stderr, "Error: Failed to seal vault data.\n");
+          exit(EXIT_FAILURE);
+        }
+
+        printf("Vault created successfully.\n");
+
         break;
+      }
 
       // Add item to the vault
-      case 'a':
+      case 'a':{
         if (optind + 2 >= argc) {
           printf("Error: Insufficient arguments for option -a\n");
           printf("-a <vault_name> <password> <file_name>\tAdd file to vault\n");
@@ -393,7 +553,73 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
         printf("Option a - Adding file to vault\n");
         // Add file to vault
+
+        const char* user_password = argv[3];
+        const char* filename = argv[2];
+        const char* entryname = argv[4];
+
+        size_t max_creds_length = 31;
+
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) > max_creds_length) {
+          fprintf(stderr, "Error: Incorrect vault password.\n");
+          return EXIT_FAILURE;
+        }
+
+        if (entryname == NULL || strlen(entryname) < 1 || strlen(entryname) > max_creds_length) {
+          fprintf(stderr, "Error: Invalid vault entry name.\n");
+          return EXIT_FAILURE;
+        }
+
+        char parsed_content[VAULT_ENTRY_SIZE];
+
+        if (read_and_parse_file(entryname, parsed_content) != 0) {
+          return EXIT_FAILURE;
+        }
+
+        // unseal vault and load it into RAM
+        if (process_vault(global_eid1, filename, user_password) != EXIT_SUCCESS) {
+          return EXIT_FAILURE;
+        }
+
+        // A vault can't have 2 entries with the same name
+        vault_entry_t *vault_entry = vault_get_entry_by_name(loaded_vault, entryname);
+        if (vault_entry != NULL) {
+          fprintf(stderr, "Error: An entry with this name already exists\n");
+          vault_free(loaded_vault);
+          return EXIT_FAILURE;
+        }
+
+        loaded_vault = vault_add(loaded_vault, entryname, parsed_content);
+
+        vault_entry_t *new_vault_entry = vault_get_entry_by_name(loaded_vault, entryname);
+        if (new_vault_entry == NULL) {
+          fprintf(stderr, "Error: Failed to add entry to vault.\n");
+          vault_free(loaded_vault);
+          return EXIT_FAILURE;
+        }
+
+        //serialize vault with data and seal it
+        char serialized_vault[vault_total_size(loaded_vault)];
+        size_t serialized_vault_size = vault_serialize(loaded_vault, serialized_vault);
+        ecall_status = e1_seal_data(global_eid1, &ret, serialized_vault, serialized_vault_size);
+
+        if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
+          fprintf(stderr, "Error: Failed to seal vault data.\n");
+          vault_free(loaded_vault);
+          exit(EXIT_FAILURE);
+        }
+
+        // After successfully adding the file to the vault, show its message digest
+        int status = calculate_entry_digest(new_vault_entry);
+        if(status != 0){
+          fprintf(stderr, "Error: Failed to calculate the vault entry digest.\n");
+          vault_free(loaded_vault);
+          exit(EXIT_FAILURE);
+        }
+
+        vault_free(loaded_vault);
         break;
+      }
 
       // List all files from the vault
       case 'l':{
@@ -405,35 +631,22 @@ int SGX_CDECL main(int argc, char *argv[]) {
 
         const char* user_password = argv[3];
         const char* filename = argv[2];
-        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) >= 32) {
-          printf("Invalid password\n");
-          exit(EXIT_FAILURE);
+
+        size_t max_creds_length = 31;
+
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) > max_creds_length) {
+          fprintf(stderr, "Error: Incorrect vault password.\n");
+          return EXIT_FAILURE;
         }
 
-        // Read vault file
-        size_t file_size;
-        uint8_t *vault_file_contents = load_vault_contents(filename, &file_size);
-
-        if (vault_file_contents == NULL) {
-          fprintf(stderr, "Error: Unable to open vault file '%s'.",filename);
-          exit(EXIT_FAILURE);
-        }
-
-        printf("File loaded successfully!\n");
-        printf("File size: %zu bytes\n", file_size);
-
-        // Unseal vault
-        e1_unseal_data(global_eid1, &ret, vault_file_contents, file_size, user_password);
-        if (ret != SGX_SUCCESS) {
-          fprintf(stderr, "Error: Failed to unseal vault data.\n");
-          free(vault_file_contents);
-          exit(EXIT_FAILURE);
+        // unseal vault and load it into RAM
+        if (process_vault(global_eid1, filename, user_password) != EXIT_SUCCESS) {
+          return EXIT_FAILURE;
         }
           
         vault_print(loaded_vault);
 
-        free(loaded_vault);
-        free(vault_file_contents);
+        vault_free(loaded_vault);
         
         break;
       }
@@ -450,9 +663,12 @@ int SGX_CDECL main(int argc, char *argv[]) {
         const char* user_password = argv[3];
         const char* new_user_password = argv[4];
         const char* filename = argv[2];
-        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) >= 32) {
-          printf("Invalid password\n");
-          exit(EXIT_FAILURE);
+
+        size_t max_creds_length = 31;
+
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) > max_creds_length) {
+          fprintf(stderr, "Error: Incorrect vault password.\n");
+          return EXIT_FAILURE;
         }
 
         if (new_user_password == NULL || strlen(new_user_password) < 1 || strlen(new_user_password) >= 32) {
@@ -460,24 +676,9 @@ int SGX_CDECL main(int argc, char *argv[]) {
           exit(EXIT_FAILURE);
         }
 
-        // Read vault file
-        size_t file_size;
-        uint8_t *vault_file_contents = load_vault_contents(filename, &file_size);
-
-        if (vault_file_contents == NULL) {
-          fprintf(stderr, "Error: Unable to open vault file '%s'.\n",filename);
-          exit(EXIT_FAILURE);
-        }
-
-        printf("File loaded successfully!\n");
-        printf("File size: %zu bytes\n", file_size);
-        
-        // Unseal vault
-        ecall_status = e1_unseal_data(global_eid1, &ret, vault_file_contents, file_size, user_password);
-        if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
-          fprintf(stderr, "Error: Failed to unseal vault data.\n");
-          free(vault_file_contents);
-          exit(EXIT_FAILURE);
+        // unseal vault and load it into RAM
+        if (process_vault(global_eid1, filename, user_password) != EXIT_SUCCESS) {
+          return EXIT_FAILURE;
         }
         
         loaded_vault = vault_change_password(loaded_vault, new_user_password);
@@ -489,14 +690,12 @@ int SGX_CDECL main(int argc, char *argv[]) {
         ecall_status = e1_seal_data(global_eid1, &ret, serialized_vault, serialized_vault_size);
         if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
           fprintf(stderr, "Error: Failed to seal vault data.\n");
-          free(vault_file_contents);
           exit(EXIT_FAILURE);
         }
 
         printf("Password updated successfully.\n");
 
-        free(loaded_vault);
-        free(vault_file_contents);
+        vault_free(loaded_vault);
 
         break;
       }
@@ -510,6 +709,7 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
         printf("Option c - Cloning vault contents\n");
         // Clone vault contents
+        //vault2 name must be different from the loaded vault
         break;
 
       default:
@@ -520,146 +720,6 @@ int SGX_CDECL main(int argc, char *argv[]) {
   }
 
   return 0;
-
-  // Create a new vault
-  // Read from input
-  char user_password[] = "password";
-  vault_t *vault = vault_new("vault.dat", user_password, "author");
-
-  vault_print(vault);
-  if (vault_authenticate(vault, user_password)) {
-    printf("Authenticated\n");
-    // Add a new entry
-    vault = vault_add(vault, "entry1", "data1");
-    vault = vault_add(vault, "entry2", "data2");
-    vault_print(vault);
-
-    //serialize vault with data and seal it
-    char serialized_vault[vault_total_size(vault)];
-    size_t serialized_vault_size = vault_serialize(vault, serialized_vault);
-    e1_seal_data(global_eid1, &ret, serialized_vault, serialized_vault_size);
-
-    // wait for vault to be unsealed and serialize Vault object -
-    // ocall_save_vault
-    //  List all entries
-    vault_entry_t *entry = vault->head;
-    while (entry != NULL) {
-      vault_entry_print(entry);
-      entry = entry->next;
-    }
-
-    // Read sealed vault data
-    FILE *fp = fopen("vault.dat", "rb");
-    if (fp == NULL) {
-      perror("fopen");
-      return 1;
-    }
-
-    // Get the file size
-    fseek(fp, 0, SEEK_END);
-    long file_size = ftell(fp);
-    if (file_size == -1) {
-      perror("ftell");
-      fclose(fp);
-      return 1;
-    }
-    rewind(fp);  // Reset the file position to the beginning
-
-    uint8_t *buffer = (uint8_t *)malloc(file_size);
-    if (buffer == NULL) {
-      fprintf(stderr, "Memory allocation failed.\n");
-      fclose(fp);
-      return 1;
-    }
-
-    // hexdump(buffer,file_size);
-
-    // Read the file contents
-    size_t bytes_read = fread(buffer, 1, file_size, fp);
-    if (bytes_read != file_size) {
-      fprintf(stderr, "Error reading file.\n");
-      free(buffer);
-      fclose(fp);
-      return 1;
-    }
-
-    size_t sealed_data_size = file_size;
-
-    // Print the file size
-    printf("File size: %zu bytes\n", sealed_data_size);
-
-    // Unseal vault with data - only unseals 8 bytes for some reason
-    e1_unseal_data(global_eid1, &ret, buffer, sealed_data_size, user_password);
-
-    // Clean up
-    free(buffer);
-    fclose(fp);
-
-    // DH to exchange keys - and transfer the vault from enclave1 to enclave1
-    // using uint8_t* (or other suitable data structure)
-
-    // Extract entry
-    if (argc == 3 && strcmp(argv[1], "-x") == 0) {
-      vault_entry_t *entry_to_extract = vault_get_entry_by_name(vault, argv[2]);
-
-      int write_result = write_vault_entry_data_to_file(entry_to_extract);
-      if (write_result == 0) {
-        printf("Contents written successfully!\n");
-      } else {
-        printf("There was an error writing to the file\n");
-      }
-    }
-
-    // Extract all entries
-    if (argc == 2 && strcmp(argv[1], "-xa") == 0) {
-      int write_result = write_vault_entries_to_files(vault);
-      if (write_result == 0) {
-        printf("Contents written successfully!\n");
-      } else {
-        printf("There was an error writing to the files\n");
-      }
-    }
-
-    // Change password
-    strncpy(user_password, "newpassword", sizeof(user_password) - 1);
-    user_password[sizeof(user_password) - 1] = '\0';
-    vault = vault_change_password(vault, user_password);
-    vault_print(vault);
-
-    // Compare digest - test case
-    if (argc == 4 && strcmp(argv[1], "-d") == 0) {
-      size_t user_digest_length = strlen(argv[3]);
-      if (user_digest_length != SHA256_DIGEST_SIZE * 2) {
-        printf("Invalid input: SHA-256 digest must be %d characters long\n", SHA256_DIGEST_SIZE * 2);
-        return 1;
-      }
-
-      vault_entry_t *entry_to_digest = vault_get_entry_by_name(vault, argv[2]);
-
-      if (entry_to_digest != NULL) {
-        printf("Found entry:\n");
-        printf(" Name: %s\n", entry_to_digest->name);
-        printf(" Data: %s\n", entry_to_digest->data);
-        printf(" Size: %zu\n", entry_to_digest->size);
-      } else {
-        printf("Entry not found\n");
-        return 1;
-      }
-
-      int comparison_result = verify_vault_entry_integrity(entry_to_digest, argv[3]);
-      if (comparison_result == 0) {
-        printf("Digests match!\n");
-      } else {
-        printf("Digests do not match\n");
-      }
-    }
-
-  } else {
-    printf("Authentication failed\n");
-    exit(1);
-  }
-
-  vault_free(vault);
 
   /* step 2 */
   if ((ret = e2_init_session(global_eid2, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
