@@ -47,7 +47,6 @@ void e1_init_session(sgx_status_t* dh_status);
 void e1_process_message1(const sgx_dh_msg1_t* msg1, sgx_dh_msg2_t* msg2, sgx_status_t* dh_status);
 void e1_process_message3(const sgx_dh_msg3_t* msg3, sgx_status_t* dh_status);
 void e1_show_secret_key(void);
-char* getSubstring(const char* buffer, int start, int length);
 sgx_status_t seal_vault(const char* vault, size_t vault_size, sgx_sealed_data_t* sealed_data, size_t sealed_size);
 sgx_status_t e1_seal_data(char* data, size_t data_size);
 sgx_status_t e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* user_password);

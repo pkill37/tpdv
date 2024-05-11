@@ -88,7 +88,7 @@ void e1_show_secret_key(void) {
 }
 
 // Retrieve a substring from a character buffer
-char* getSubstring(const char* buffer, int start, int length) {
+static char* getSubstring(const char* buffer, int start, int length) {
   int bufferLength = strlen(buffer);
 
   // Ensure start index is within bounds
