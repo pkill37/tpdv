@@ -516,6 +516,11 @@ int SGX_CDECL main(int argc, char *argv[]) {
           return EXIT_FAILURE;
         }
 
+        if (file_exists_in_current_dir(filename) != 0) {
+          fprintf(stderr, "File '%s' exists in the current directory.\n", filename);
+          return EXIT_FAILURE;
+        }
+
         if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) > max_creds_length) {
           fprintf(stderr, "Error: Incorrect vault password.\n");
           return EXIT_FAILURE;

@@ -52,3 +52,4 @@ int write_vault_entry_data_to_file(const vault_entry_t* entry);
 int process_vault(sgx_enclave_id_t global_eid1, const char* filename, const char* user_password);
 int read_and_parse_file(const char *filename, char *parsed_content);
 char *get_filename(const char *path);
+int file_exists_in_current_dir(const char *filename);

@@ -7,6 +7,7 @@
 #include "sgx_urts.h"
 #include "stdint.h"
 #include "stdio.h"
+#include <dirent.h>
 #include "stdlib.h"
 #include "string.h"
 
@@ -555,4 +556,25 @@ char *get_filename(const char *path) {
   }
 
   return (char *)filename;
+}
+
+int file_exists_in_current_dir(const char *filename) {
+  DIR *dir = opendir(".");
+
+  if (dir == NULL) {
+    perror("Error opening directory"); 
+    return 0;
+  }
+
+  struct dirent *entry;
+  // Iterate over directory entries
+  while ((entry = readdir(dir)) != NULL) { 
+    if (strcmp(entry->d_name, filename) == 0) {
+      closedir(dir);
+      return 1;
+    }
+  }
+
+  closedir(dir);
+  return 0;
 }
