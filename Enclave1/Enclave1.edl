@@ -61,6 +61,20 @@ enclave
       size_t sealed_data_size,
       [in, size=32] const char* user_password
     );
+    public sgx_status_t e1_update_password(
+      [in, size=sealed_data_size] uint8_t* sealed_data, 
+      size_t sealed_data_size,
+      [in, string]const char* user_password, 
+      [in, string]const char* new_password
+    );
+    public sgx_status_t e1_add_entry(
+      [in, size=sealed_data_size] uint8_t* sealed_data, 
+      size_t sealed_data_size,
+      [in, size=entry_size] char* entry,
+      size_t entry_size,
+      [in, string] const char* filename,
+      [in, string]const char* user_password
+    );
   };
   untrusted
   {
@@ -74,6 +88,5 @@ enclave
       [in, size=unsealed_size]uint8_t* unsealed_data, 
       size_t unsealed_size
     );
-    
   };
 };

@@ -51,34 +51,7 @@
 
 vault_t* loaded_vault = NULL;
 
-void hexdump(const void *data, size_t size) {
-  char ascii[17];
-  size_t i, j;
-  ascii[16] = '\0';
-  for (i = 0; i < size; ++i) {
-    printf("%02X ", ((unsigned char *)data)[i]);
-    if (((unsigned char *)data)[i] >= ' ' && ((unsigned char *)data)[i] <= '~') {
-      ascii[i % 16] = ((unsigned char *)data)[i];
-    } else {
-      ascii[i % 16] = '.';
-    }
-    if ((i + 1) % 8 == 0 || i + 1 == size) {
-      printf(" ");
-      if ((i + 1) % 16 == 0) {
-        printf("|  %s \n", ascii);
-      } else if (i + 1 == size) {
-        ascii[(i + 1) % 16] = '\0';
-        if ((i + 1) % 16 <= 8) {
-          printf(" ");
-        }
-        for (j = (i + 1) % 16; j < 16; ++j) {
-          printf("   ");
-        }
-        printf("|  %s \n", ascii);
-      }
-    }
-  }
-}
+
 
 /*
  * Error reporting
@@ -217,6 +190,35 @@ void print_error_message(sgx_status_t ret, const char *sgx_function_name) {
         ret);
 }
 
+void hexdump(const void *data, size_t size) {
+  char ascii[17];
+  size_t i, j;
+  ascii[16] = '\0';
+  for (i = 0; i < size; ++i) {
+    printf("%02X ", ((unsigned char *)data)[i]);
+    if (((unsigned char *)data)[i] >= ' ' && ((unsigned char *)data)[i] <= '~') {
+      ascii[i % 16] = ((unsigned char *)data)[i];
+    } else {
+      ascii[i % 16] = '.';
+    }
+    if ((i + 1) % 8 == 0 || i + 1 == size) {
+      printf(" ");
+      if ((i + 1) % 16 == 0) {
+        printf("|  %s \n", ascii);
+      } else if (i + 1 == size) {
+        ascii[(i + 1) % 16] = '\0';
+        if ((i + 1) % 16 <= 8) {
+          printf(" ");
+        }
+        for (j = (i + 1) % 16; j < 16; ++j) {
+          printf("   ");
+        }
+        printf("|  %s \n", ascii);
+      }
+    }
+  }
+}
+
 /*
  * Enclave1 stuff
  */
@@ -266,7 +268,7 @@ int ocall_save_vault(const uint8_t *sealed_data, const size_t sealed_size, const
     fclose(file);
     return 1;
   }
-  
+  printf("\n\nAll saved n gucci: %s - %zu\n\n",filename, sealed_size);
   fclose(file);
   return 0;
 }
@@ -564,52 +566,31 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
 
         char parsed_content[VAULT_ENTRY_SIZE];
-        if (read_and_parse_file(entryname, parsed_content) != 0) {
+        size_t entry_size;
+        if (read_and_parse_file(entryname, parsed_content, &entry_size) != 0) {
           return EXIT_FAILURE;
         }
 
-        // unseal vault and load it into RAM
-        if (process_vault(global_eid1, filename, user_password) != EXIT_SUCCESS) {
+        size_t file_size;
+        uint8_t* vault_file_contents = load_vault_contents(filename, &file_size);
+        if (vault_file_contents == NULL) {
+          fprintf(stderr, "Error: Unable to open vault file '%s'.", filename);
           return EXIT_FAILURE;
         }
 
-        // A vault can't have 2 entries with the same name
-        vault_entry_t *vault_entry = vault_get_entry_by_name(loaded_vault, entryname);
-        if (vault_entry != NULL) {
-          fprintf(stderr, "Error: An entry with this name already exists\n");
-          vault_free(loaded_vault);
-          return EXIT_FAILURE;
-        }
-
-        loaded_vault = vault_add(loaded_vault, entryname, parsed_content);
-
-        vault_entry_t *new_vault_entry = vault_get_entry_by_name(loaded_vault, entryname);
-        if (new_vault_entry == NULL) {
-          fprintf(stderr, "Error: Failed to add entry to vault.\n");
-          vault_free(loaded_vault);
-          return EXIT_FAILURE;
-        }
-
-        //serialize vault with data and seal it
-        char serialized_vault[vault_total_size(loaded_vault)];
-        size_t serialized_vault_size = vault_serialize(loaded_vault, serialized_vault);
-        ecall_status = e1_seal_data(global_eid1, &ret, serialized_vault, serialized_vault_size);
-
+        ecall_status = e1_add_entry(global_eid1, &ret, vault_file_contents, file_size, parsed_content, entry_size, entryname, user_password);
         if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
-          fprintf(stderr, "Error: Failed to seal vault data.\n");
-          vault_free(loaded_vault);
-          exit(EXIT_FAILURE);
+          fprintf(stderr, "Error: Failed to add entry to vault. %x - %x\n",ecall_status, ret);
+          return EXIT_FAILURE;
         }
 
-        // After successfully adding the file to the vault, show its message digest
-        int status = calculate_entry_digest(new_vault_entry);
+        int status = calculate_file_digest(entryname, parsed_content, entry_size);
         if(status != 0){
           fprintf(stderr, "Error: Failed to calculate the vault entry digest.\n");
           vault_free(loaded_vault);
           exit(EXIT_FAILURE);
         }
 
-        vault_free(loaded_vault);
         break;
       }
 
@@ -663,31 +644,20 @@ int SGX_CDECL main(int argc, char *argv[]) {
           return EXIT_FAILURE;
         }
 
-        if (new_user_password == NULL || strlen(new_user_password) < 1 || strlen(new_user_password) >= 32) {
-          fprintf(stderr, "Error: Password too long (max 31 characters).\n");
-          exit(EXIT_FAILURE);
-        }
-
-        // unseal vault and load it into RAM
-        if (process_vault(global_eid1, filename, user_password) != EXIT_SUCCESS) {
+        size_t file_size;
+        uint8_t* vault_file_contents = load_vault_contents(filename, &file_size);
+        if (vault_file_contents == NULL) {
+          fprintf(stderr, "Error: Unable to open vault file '%s'.\n", filename);
           return EXIT_FAILURE;
         }
         
-        loaded_vault = vault_change_password(loaded_vault, new_user_password);
-        
-        // Prepare and seal vault data for storage
-        char serialized_vault[vault_total_size(loaded_vault)];
-        size_t serialized_vault_size = vault_serialize(loaded_vault, serialized_vault);
-
-        ecall_status = e1_seal_data(global_eid1, &ret, serialized_vault, serialized_vault_size);
+        ecall_status = e1_update_password(global_eid1, &ret, vault_file_contents, file_size, user_password, new_user_password);
         if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
-          fprintf(stderr, "Error: Failed to seal vault data.\n");
-          exit(EXIT_FAILURE);
+          fprintf(stderr, "Error: Password update failed.\n");
+          return EXIT_FAILURE;
         }
-
+        
         printf("Password updated successfully.\n");
-
-        vault_free(loaded_vault);
 
         break;
       }
