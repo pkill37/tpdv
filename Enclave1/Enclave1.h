@@ -37,6 +37,7 @@
 
 #include "sgx_dh.h"
 #include "sgx_tseal.h"
+#include "../App/Vault.h"
 
 #if defined(__cplusplus)
 extern "C" {
@@ -51,6 +52,8 @@ char* getSubstring(const char* buffer, int start, int length);
 sgx_status_t seal_vault(const char* vault, size_t vault_size, sgx_sealed_data_t* sealed_data, size_t sealed_size);
 sgx_status_t e1_seal_data(char* data, size_t data_size);
 sgx_status_t e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* user_password);
+sgx_status_t e1_update_password(uint8_t* sealed_data, size_t sealed_data_size, const char* user_password, const char* new_password);
+sgx_status_t e1_add_item(uint8_t* sealed_data, size_t sealed_data_size, char* entry, size_t entry_size, const char* filename, const char* user_password);
 
 #if defined(__cplusplus)
 }

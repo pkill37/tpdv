@@ -343,7 +343,7 @@ int verify_vault_entry_integrity(vault_entry_t* entry, const char* user_digest) 
   return comparison_result;
 }
 
-int calculate_entry_digest(vault_entry_t* entry) {
+int calculate_file_digest(const char* filename, const char* data, size_t size) {
   // Initialize OpenSSL
   init_openssl();
   const EVP_MD* digest = get_digest("sha256");
@@ -358,7 +358,7 @@ int calculate_entry_digest(vault_entry_t* entry) {
   }
 
   // Process entry data and update digest
-  if (process_data(entry->data, entry->size, mdctx) != 1) {
+  if (process_data(data, size, mdctx) != 1) {
     return handle_errors(mdctx);
   }
 
@@ -376,7 +376,7 @@ int calculate_entry_digest(vault_entry_t* entry) {
   }
   calculated_digest_hex[md_len * 2] = '\0';
 
-  printf("Calculated SHA-256 digest for '%s': %s\n", entry->data, calculated_digest_hex);
+  printf("Calculated SHA-256 digest for '%s': %s\n", filename, calculated_digest_hex);
 
   // Clean up
   EVP_MD_CTX_destroy(mdctx);
@@ -501,7 +501,7 @@ int process_vault(sgx_enclave_id_t global_eid1, const char* filename, const char
   return EXIT_SUCCESS;
 }
 
-int read_and_parse_file(const char *filename, char *parsed_content) {
+int read_and_parse_file(const char *filename, char *parsed_content, size_t *size) {
   FILE *fp;
   size_t bytes_read;
 
@@ -536,6 +536,7 @@ int read_and_parse_file(const char *filename, char *parsed_content) {
     fclose(fp);
     return -1;
   }
+  *size = bytes_read;
 
   parsed_content[bytes_read] = '\0';
 
