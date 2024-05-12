@@ -762,6 +762,8 @@ int SGX_CDECL main(int argc, char *argv[]) {
           return 1;
         }
 
+        e1_show_secret_key(global_eid1);
+
         // Unseal vault1 and load it into global variable loaded_vault, then serialize it
         if (process_vault(global_eid1, vault1_filename, user_password) != EXIT_SUCCESS) return EXIT_FAILURE;
         uint8_t serialized_vault1[vault_total_size(loaded_vault)];
@@ -770,25 +772,19 @@ int SGX_CDECL main(int argc, char *argv[]) {
         // Encrypt vault data in enclave1 using e1_encrypt_data
         size_t encrypted_vault1_size = vault_total_size(loaded_vault);
         uint8_t encrypted_vault1[encrypted_vault1_size];
-        ecall_status = e1_encrypt_data(global_eid1, serialized_vault1, serialized_vault1_size, encrypted_vault1, encrypted_vault1_size);
+        ecall_status = e1_encrypt_data(global_eid1, &ret, serialized_vault1, serialized_vault1_size, encrypted_vault1, encrypted_vault1_size);
         if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
           fprintf(stderr, "Error: Failed to encrypt vault data.\n");
           exit(EXIT_FAILURE);
         }
 
-        // Communicate encrypted vault data by writing a file in the shared host Linux filesystem
         hexdump(encrypted_vault1, encrypted_vault1_size);
         hexdump(serialized_vault1, serialized_vault1_size);
-        if (ocall_save_vault((const uint8_t *)encrypted_vault1, encrypted_vault1_size, vault1_filename) != 0) {
-          fprintf(stderr, "Error: Failed to save encrypted vault data.\n");
-          exit(EXIT_FAILURE);
-        }
 
-        // TODO: read file from shared host Linux filesystem and pass it to enclave2
         // Decrypt vault1 in enclave2 using e2_decrypt_data
         size_t decrypted_vault2_size = encrypted_vault1_size;
         uint8_t decrypted_vault2[decrypted_vault2_size];
-        ecall_status = e2_decrypt_data(global_eid2, encrypted_vault1, encrypted_vault1_size, decrypted_vault2, decrypted_vault2_size);
+        ecall_status = e2_decrypt_data(global_eid2, &ret, encrypted_vault1, encrypted_vault1_size, decrypted_vault2, decrypted_vault2_size);
         if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
           fprintf(stderr, "Error: Failed to decrypt vault data.\n");
           exit(EXIT_FAILURE);

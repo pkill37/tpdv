@@ -39,6 +39,7 @@
 #include "sgx_error.h"
 #include "sgx_trts.h"
 #include "sgx_tseal.h"
+#include "sgx_tcrypto.h"
 
 int ret;
 
@@ -80,20 +81,34 @@ void e1_process_message3(const sgx_dh_msg3_t* msg3, sgx_status_t* dh_status) {
   *dh_status = sgx_dh_initiator_proc_msg3(msg3, &e1_session, &e1_aek, &e1_responder_identity);
 }
 
-// Method to encrypt data with e1_aek using SGX encryption API
-void e1_encrypt_data(const uint8_t* plain_text, uint32_t plain_text_length, uint8_t* cipher_text, uint32_t cipher_text_length) {
-  sgx_status_t status = sgx_rijndael128GCM_encrypt(&e1_aek, plain_text, plain_text_length, cipher_text, NULL, 0, NULL, 0, NULL);
-  if (status != SGX_SUCCESS) {
-    printf("Failed to encrypt data\n");
-  }
+void e1_show_secret_key(void) {
+  printf("Enclave 1 AEK:");
+  for (int i = 0; i < 16; i++) printf(" %02X", 0xFF & (int)e1_aek[i]);
+  printf("\n");
 }
 
-// Method to decrypt data with e1_aek using SGX encryption API
-void e1_decrypt_data(const uint8_t *cipher_text, uint32_t cipher_text_length, uint8_t *plain_text, uint32_t plain_text_length) {
-  sgx_status_t status = sgx_rijndael128GCM_decrypt(&e1_aek, cipher_text, cipher_text_length, plain_text, NULL, 0, NULL, 0, NULL);
-  if (status != SGX_SUCCESS) {
-    printf("Failed to decrypt data\n");
-  }
+// Method to encrypt data with e1_aek using SGX encryption API
+sgx_status_t e1_encrypt_data(const uint8_t* plain_text, uint32_t plain_text_length, uint8_t* cipher_text, uint32_t cipher_text_length) {
+    if (plain_text == NULL || cipher_text == NULL) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    uint8_t iv[12] = {0}; // Initialization vector (IV) for AES-GCM, should be unique for each encryption
+
+    sgx_status_t status = sgx_rijndael128GCM_encrypt(&e1_aek, plain_text, plain_text_length, cipher_text, iv, sizeof(iv), NULL, 0, NULL);
+    return status;
+}
+
+// Method to decrypt data with e1_aek using SGX decryption API
+sgx_status_t e1_decrypt_data(const uint8_t* cipher_text, uint32_t cipher_text_length, uint8_t* plain_text, uint32_t plain_text_length) {
+    if (cipher_text == NULL || plain_text == NULL) {
+        return SGX_ERROR_INVALID_PARAMETER;
+    }
+
+    uint8_t iv[12] = {0}; // Initialization vector (IV) for AES-GCM, should match the IV used for encryption
+
+    sgx_status_t status = sgx_rijndael128GCM_decrypt(&e1_aek, cipher_text, cipher_text_length, plain_text, iv, sizeof(iv), NULL, 0, NULL);
+    return status;
 }
 
 // Retrieve a substring from a character buffer
@@ -140,7 +155,7 @@ sgx_status_t e1_seal_data(char* data, size_t data_size) {
   uint8_t* sealed_data = (uint8_t*)malloc(sealed_size);
 
   if (sealed_data == NULL) {
-    ocall_e1_print_string("Error sealing the valut: Out of memory\n");
+    ocall_e1_print_string("Error sealing the vault: Out of memory\n");
     return SGX_ERROR_OUT_OF_MEMORY;
   }
 

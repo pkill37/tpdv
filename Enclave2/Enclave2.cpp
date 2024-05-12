@@ -75,9 +75,7 @@ void e2_process_message2(const sgx_dh_msg2_t *msg2, sgx_dh_msg3_t *msg3, sgx_sta
 }
 
 // Method to decrypt data with e2_aek using SGX encryption API
-void e2_decrypt_data(const uint8_t *cipher_text, uint32_t cipher_text_length, uint8_t *plain_text, uint32_t plain_text_length) {
+sgx_status_t e2_decrypt_data(const uint8_t *cipher_text, uint32_t cipher_text_length, uint8_t *plain_text, uint32_t plain_text_length) {
   sgx_status_t status = sgx_rijndael128GCM_decrypt(&e2_aek, cipher_text, cipher_text_length, plain_text, NULL, 0, NULL, 0, NULL);
-  if (status != SGX_SUCCESS) {
-    printf("Failed to decrypt data\n");
-  }
+  return status;
 }
