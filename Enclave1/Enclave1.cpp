@@ -80,11 +80,20 @@ void e1_process_message3(const sgx_dh_msg3_t* msg3, sgx_status_t* dh_status) {
   *dh_status = sgx_dh_initiator_proc_msg3(msg3, &e1_session, &e1_aek, &e1_responder_identity);
 }
 
-// show key
-void e1_show_secret_key(void) {
-  printf("Enclave 1 AEK:");
-  for (int i = 0; i < 16; i++) printf(" %02X", 0xFF & (int)e1_aek[i]);
-  printf("\n");
+// Method to encrypt data with e1_aek using SGX encryption API
+void e1_encrypt_data(const uint8_t* plain_text, uint32_t plain_text_length, uint8_t* cipher_text, uint32_t cipher_text_length) {
+  sgx_status_t status = sgx_rijndael128GCM_encrypt(&e1_aek, plain_text, plain_text_length, cipher_text, NULL, 0, NULL, 0, NULL);
+  if (status != SGX_SUCCESS) {
+    printf("Failed to encrypt data\n");
+  }
+}
+
+// Method to decrypt data with e1_aek using SGX encryption API
+void e1_decrypt_data(const uint8_t *cipher_text, uint32_t cipher_text_length, uint8_t *plain_text, uint32_t plain_text_length) {
+  sgx_status_t status = sgx_rijndael128GCM_decrypt(&e1_aek, cipher_text, cipher_text_length, plain_text, NULL, 0, NULL, 0, NULL);
+  if (status != SGX_SUCCESS) {
+    printf("Failed to decrypt data\n");
+  }
 }
 
 // Retrieve a substring from a character buffer
@@ -183,36 +192,6 @@ sgx_status_t e1_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const
     ocall_e1_print_string(message);
     return unsealing_status;
   }
-
-  /* DEBUG
-    const int num_chars_to_print = 32;
-    char buffer[num_chars_to_print + 1];
-    snprintf(buffer, sizeof(buffer), "%.*s", num_chars_to_print, unsealed_data);
-    // Print the result
-    snprintf(message, sizeof(message), "First 32 characters: %s\n\n\n", buffer);
-    ocall_e1_print_string(message);
-
-    // Calculate the starting position of the password field
-    const uint8_t *start_ptr = unsealed_data + 38;
-    const char *format_string = "%02x ";
-    int bytes_printed = 0;
-    // Create buffer with the vault password
-    for (int i = 0; i < 32; i++) {
-      bytes_printed += snprintf(message + bytes_printed, sizeof(message) -
-    bytes_printed, format_string, start_ptr[i]);
-    }
-
-    // Ensure string termination (if there's space left)
-    if (bytes_printed < sizeof(message) - 1) {
-        message[bytes_printed] = '\0';
-    }
-
-    ocall_e1_print_string("PRINTING RAW DATA: \n\n");
-
-    ocall_e1_print_string(message);
-    ocall_e1_print_string("\n\n");
-  */
-
   ocall_e1_print_string("Unseal success\n");
 
   // Calculate the starting position of the password field

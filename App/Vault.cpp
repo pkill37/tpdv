@@ -189,7 +189,7 @@ void vault_free(vault_t* vault) {
 }
 
 // Handle digest errors and cleanup
-int handle_errors(EVP_MD_CTX* mdctx) {
+static int handle_errors(EVP_MD_CTX* mdctx) {
   ERR_print_errors_fp(stderr);
   if (mdctx) EVP_MD_CTX_destroy(mdctx);
   EVP_cleanup();
@@ -476,10 +476,8 @@ uint8_t *load_vault_contents(const char *filename, size_t *file_size) {
 }
 
 int process_vault(sgx_enclave_id_t global_eid1, const char* filename, const char* user_password) {
-  sgx_status_t ret, ecall_status;
-  size_t file_size;
-
   // Read vault file
+  size_t file_size;
   uint8_t* vault_file_contents = load_vault_contents(filename, &file_size);
   if (vault_file_contents == NULL) {
     fprintf(stderr, "Error: Unable to open vault file '%s'.", filename);
@@ -490,6 +488,7 @@ int process_vault(sgx_enclave_id_t global_eid1, const char* filename, const char
   printf("File size: %zu bytes\n", file_size);
 
   // Unseal vault
+  sgx_status_t ret, ecall_status;
   ecall_status = e1_unseal_data(global_eid1, &ret, vault_file_contents, file_size, user_password);
   if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
     fprintf(stderr, "Error: Failed to unseal vault data.\n");

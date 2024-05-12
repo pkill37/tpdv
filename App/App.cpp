@@ -224,10 +224,10 @@ void print_error_message(sgx_status_t ret, const char *sgx_function_name) {
 sgx_enclave_id_t global_eid1 = 0;
 
 int initialize_enclave1(void) {
-  sgx_status_t ret;
+  sgx_status_t ret = sgx_create_enclave(ENCLAVE1_FILENAME, SGX_DEBUG_FLAG, NULL, NULL, &global_eid1, NULL);
 
-  if ((ret = sgx_create_enclave(ENCLAVE1_FILENAME, SGX_DEBUG_FLAG, NULL, NULL, &global_eid1, NULL)) != SGX_SUCCESS) {
-    print_error_message(ret, "sgx_create_enclave (enclave1)");
+  if (ret != SGX_SUCCESS) {
+    print_error_message(ret, "sgx_create_enclave(enclave1)");
     return -1;
   }
   return 0;
@@ -300,39 +300,28 @@ void print_help() {
  */
 
 int SGX_CDECL main(int argc, char *argv[]) {
-  sgx_status_t ret, dh_status, ecall_status;
-  sgx_dh_msg1_t msg1;
-  sgx_dh_msg2_t msg2;
-  sgx_dh_msg3_t msg3;
-
-  // create enclaves
-  if (initialize_enclave1() < 0) return 1;
-  if (initialize_enclave2() < 0) return 2;
-
-  /* DH key establishment between the two enclaves */
-  /* step 1 */
-  if ((ret = e1_init_session(global_eid1, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
-    print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e1_init_session");
-    return 1;
-  }
-  
-  // New entry point
-
-  int opt;
-  const char *options = "hdxfvalpc";
-
   if(argc < 2){
     print_help();
     return 0;
   }
 
+  // Initialize both enclaves
+  if (initialize_enclave1() < 0) return 1;
+  if (initialize_enclave2() < 0) return 2;
+
+  // global reusable status variables
+  sgx_status_t ret, dh_status, ecall_status;
+
   // read user input
+  int opt;
+  const char *options = "hdxfvalpc";
   while ((opt = getopt(argc, argv, options)) != -1) {
     switch (opt) {
       // Show help info
-      case 'h':
+      case 'h': {
         print_help();
         break;
+      }
 
       // Compare the provided digest with the digest from a file in the vault
       case 'd':{
@@ -397,6 +386,7 @@ int SGX_CDECL main(int argc, char *argv[]) {
 
         break;
       }
+
       // Extract all files from the vault
       case 'x':{
         if (optind + 1 >= argc) {
@@ -504,11 +494,9 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
         printf("Option v - Creating a new vault\n");
         // Create a new vault
-
         const char* user_password = argv[3];
         const char* filename = argv[2];
         const char* author = argv[4];
-
         size_t max_creds_length = 31;
 
         if (filename == NULL || strlen(filename) < 1 || strlen(filename) > max_creds_length) {
@@ -576,7 +564,6 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
 
         char parsed_content[VAULT_ENTRY_SIZE];
-
         if (read_and_parse_file(entryname, parsed_content) != 0) {
           return EXIT_FAILURE;
         }
@@ -706,63 +693,129 @@ int SGX_CDECL main(int argc, char *argv[]) {
       }
 
       // Clone vault contents
-      case 'c':
+      case 'c': {
         if (optind + 1 >= argc) {
           printf("Error: Insufficient arguments for option -c\n");
           printf("-c <vault_name> <password> <vault2_name>\tClone vault contents\n");
           exit(EXIT_FAILURE);
         }
         printf("Option c - Cloning vault contents\n");
-        // Clone vault contents
-        //vault2 name must be different from the loaded vault
-        break;
 
-      default:
+        //vault2 name must be different from the loaded vault filename
+        const char* vault1_filename = argv[2];
+        const char* vault2_filename = argv[4];
+        if(strcmp(vault1_filename,vault2_filename) == 0){
+          fprintf(stderr, "Error: Vault2 name must be different from the vault1 filename.\n");
+          return EXIT_FAILURE;
+        }
+
+        // Validate user input
+        const char* user_password = argv[3];
+        size_t max_creds_length = 31;
+        if (user_password == NULL || strlen(user_password) < 1 || strlen(user_password) > max_creds_length) {
+          fprintf(stderr, "Error: Invalid vault password.\n");
+          return EXIT_FAILURE;
+        }
+
+        // DH shared key establishment between the two enclaves
+        sgx_status_t ret, dh_status, ecall_status;
+        sgx_dh_msg1_t msg1;
+        sgx_dh_msg2_t msg2;
+        sgx_dh_msg3_t msg3;
+
+        // DH step 1
+        if ((ret = e1_init_session(global_eid1, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
+          print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e1_init_session");
+          return 1;
+        }
+
+        // DH step 2
+        if ((ret = e2_init_session(global_eid2, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
+          print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e2_init_session");
+          return 1;
+        }
+
+        // DH step 3
+        if ((ret = e2_create_message1(global_eid2, &msg1, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
+          print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e2_create_message1");
+          return 1;
+        }
+
+        // DH step 4
+        // DH step 5
+        if ((ret = e1_process_message1(global_eid1, &msg1, &msg2, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
+          print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e1_process_message1");
+          return 1;
+        }
+
+        // DH step 6
+        // DH step 7
+        if ((ret = e2_process_message2(global_eid2, &msg2, &msg3, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
+          print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e2_process_message2");
+          return 1;
+        }
+
+        // DH step 8
+        // DH step 9
+        if ((ret = e1_process_message3(global_eid1, &msg3, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
+          print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e1_process_message3");
+          return 1;
+        }
+
+        // Unseal vault1 and load it into global variable loaded_vault, then serialize it
+        if (process_vault(global_eid1, vault1_filename, user_password) != EXIT_SUCCESS) return EXIT_FAILURE;
+        uint8_t serialized_vault1[vault_total_size(loaded_vault)];
+        size_t serialized_vault1_size = vault_serialize(loaded_vault, (char*)serialized_vault1);
+
+        // Encrypt vault data in enclave1 using e1_encrypt_data
+        size_t encrypted_vault1_size = vault_total_size(loaded_vault);
+        uint8_t encrypted_vault1[encrypted_vault1_size];
+        ecall_status = e1_encrypt_data(global_eid1, serialized_vault1, serialized_vault1_size, encrypted_vault1, encrypted_vault1_size);
+        if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
+          fprintf(stderr, "Error: Failed to encrypt vault data.\n");
+          exit(EXIT_FAILURE);
+        }
+
+        // Communicate encrypted vault data by writing a file in the shared host Linux filesystem
+        hexdump(encrypted_vault1, encrypted_vault1_size);
+        hexdump(serialized_vault1, serialized_vault1_size);
+        if (ocall_save_vault((const uint8_t *)encrypted_vault1, encrypted_vault1_size, vault1_filename) != 0) {
+          fprintf(stderr, "Error: Failed to save encrypted vault data.\n");
+          exit(EXIT_FAILURE);
+        }
+
+        // TODO: read file from shared host Linux filesystem and pass it to enclave2
+        // Decrypt vault1 in enclave2 using e2_decrypt_data
+        size_t decrypted_vault2_size = encrypted_vault1_size;
+        uint8_t decrypted_vault2[decrypted_vault2_size];
+        ecall_status = e2_decrypt_data(global_eid2, encrypted_vault1, encrypted_vault1_size, decrypted_vault2, decrypted_vault2_size);
+        if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
+          fprintf(stderr, "Error: Failed to decrypt vault data.\n");
+          exit(EXIT_FAILURE);
+        }
+
+        //serialize vault with data and seal it
+        //ecall_status = e2_seal_data(global_eid2, decrypted_vault2, decrypted_vault2_size);
+        //if (ocall_save_vault((const uint8_t *)decrypted_vault2, decrypted_vault2_size, vault2_filename) != 0) {
+        //  fprintf(stderr, "Error: Failed to save encrypted vault data.\n");
+        //  vault_free(loaded_vault);
+        //  exit(EXIT_FAILURE);
+        //}
+
+        printf("Vault contents cloned successfully.\n");
+        vault_free(loaded_vault);
+        break;
+      }
+
+      // Unknown
+      default: {
         printf("Unknown option\n");
         print_help();
         exit(EXIT_FAILURE);
+      }
     }
   }
 
-  return 0;
-
-  /* step 2 */
-  if ((ret = e2_init_session(global_eid2, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
-    print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e2_init_session");
-    return 1;
-  }
-  /* step 3 */
-  if ((ret = e2_create_message1(global_eid2, &msg1, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
-    print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e2_create_message1");
-    return 1;
-  }
-  /* step 4 */
-  /* step 5 */
-  if ((ret = e1_process_message1(global_eid1, &msg1, &msg2, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
-    print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e1_process_message1");
-    return 1;
-  }
-  /* step 6 */
-  /* step 7 */
-  if ((ret = e2_process_message2(global_eid2, &msg2, &msg3, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
-    print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e2_process_message2");
-    return 1;
-  }
-  /* step 8 */
-  /* step 9 */
-  if ((ret = e1_process_message3(global_eid1, &msg3, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
-    print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e1_process_message3");
-    return 1;
-  }
-  /* done! show secret key */
-  if ((ret = e1_show_secret_key(global_eid1)) != SGX_SUCCESS) {
-    print_error_message(ret, "e1_show_secret_key");
-    return 1;
-  }
-  if ((ret = e2_show_secret_key(global_eid2)) != SGX_SUCCESS) {
-    print_error_message(ret, "e2_show_secret_key");
-    return 1;
-  }
   /* destroy enclaves */
   if ((ret = sgx_destroy_enclave(global_eid1)) != SGX_SUCCESS) {
     print_error_message(ret, "sgx_destroy_enclave (enclave1)");

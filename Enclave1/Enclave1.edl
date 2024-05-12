@@ -39,9 +39,20 @@ enclave
     public void e1_init_session([out] sgx_status_t *dh_status);
     public void e1_process_message1([in] const sgx_dh_msg1_t *msg1,[out] sgx_dh_msg2_t *msg2,[out] sgx_status_t *dh_status);
     public void e1_process_message3([in] const sgx_dh_msg3_t *msg3,[out] sgx_status_t *dh_status);
-    public void e1_show_secret_key(void);
+    public void e1_encrypt_data(
+      [in, size=plain_text_length] const uint8_t* plain_text,
+      uint32_t plain_text_length,
+      [out] uint8_t* cipher_text,
+      uint32_t cipher_text_length
+    );
+    void e1_decrypt_data(
+      [in, size=cipher_text_length] const uint8_t *cipher_text,
+      uint32_t cipher_text_length,
+      [out] uint8_t *plain_text,
+      uint32_t plain_text_length
+    );
     public sgx_status_t e1_seal_data(
-      [in, size=data_size] char* data, 
+      [in, size=data_size] char* data,
       size_t data_size
     );
     public sgx_status_t e1_unseal_data(

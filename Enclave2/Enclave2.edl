@@ -39,7 +39,12 @@ enclave
     public void e2_init_session([out] sgx_status_t *dh_status);
     public void e2_create_message1([out] sgx_dh_msg1_t *msg1,[out] sgx_status_t *dh_status);
     public void e2_process_message2([in] const sgx_dh_msg2_t *msg2,[out] sgx_dh_msg3_t *msg3,[out] sgx_status_t *dh_status);
-    public void e2_show_secret_key(void);
+    void e2_decrypt_data(
+      [in, size=cipher_text_length] const uint8_t *cipher_text,
+      uint32_t cipher_text_length,
+      [out] uint8_t *plain_text,
+      uint32_t plain_text_length
+    );
   };
   untrusted
   {
