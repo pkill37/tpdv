@@ -87,28 +87,42 @@ void e1_show_secret_key(void) {
   printf("\n");
 }
 
-// Method to encrypt data with e1_aek using SGX encryption API
-sgx_status_t e1_encrypt_data(const uint8_t* plain_text, uint32_t plain_text_length, uint8_t* cipher_text, uint32_t cipher_text_length) {
-    if (plain_text == NULL || cipher_text == NULL) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
+//https://github.com/rodolfoams/sgx-aes-gcm/blob/master/CryptoTestingApp/CryptoTestingApp.cpp
+#define BUFLEN 2048
+sgx_status_t e1_encrypt_data(uint8_t* decMessageIn, uint32_t len, uint8_t* encMessageOut, uint32_t lenOut)
+{
+	uint8_t *origMessage = (uint8_t *) decMessageIn;
+	uint8_t p_dst[BUFLEN] = {0};
 
-    uint8_t iv[12] = {0}; // Initialization vector (IV) for AES-GCM, should be unique for each encryption
+	// Generate the IV (nonce)
+	sgx_read_rand(p_dst + SGX_AESGCM_MAC_SIZE, SGX_AESGCM_IV_SIZE);
 
-    sgx_status_t status = sgx_rijndael128GCM_encrypt(&e1_aek, plain_text, plain_text_length, cipher_text, iv, sizeof(iv), NULL, 0, NULL);
-    return status;
+	sgx_status_t status = sgx_rijndael128GCM_encrypt(
+		&e1_aek,
+		origMessage, len, 
+		p_dst + SGX_AESGCM_MAC_SIZE + SGX_AESGCM_IV_SIZE,
+		p_dst + SGX_AESGCM_MAC_SIZE, SGX_AESGCM_IV_SIZE,
+		NULL, 0,
+		(sgx_aes_gcm_128bit_tag_t *) (p_dst));	
+	memcpy(encMessageOut,p_dst,lenOut);
+  return status;
 }
+sgx_status_t e1_decrypt_data(uint8_t* encMessageIn, uint32_t len, uint8_t* decMessageOut, uint32_t lenOut)
+{
+	uint8_t *encMessage = (uint8_t *) encMessageIn;
+	uint8_t p_dst[BUFLEN] = {0};
 
-// Method to decrypt data with e1_aek using SGX decryption API
-sgx_status_t e1_decrypt_data(const uint8_t* cipher_text, uint32_t cipher_text_length, uint8_t* plain_text, uint32_t plain_text_length) {
-    if (cipher_text == NULL || plain_text == NULL) {
-        return SGX_ERROR_INVALID_PARAMETER;
-    }
-
-    uint8_t iv[12] = {0}; // Initialization vector (IV) for AES-GCM, should match the IV used for encryption
-
-    sgx_status_t status = sgx_rijndael128GCM_decrypt(&e1_aek, cipher_text, cipher_text_length, plain_text, iv, sizeof(iv), NULL, 0, NULL);
-    return status;
+	sgx_status_t status = sgx_rijndael128GCM_decrypt(
+		&e1_aek,
+		encMessage + SGX_AESGCM_MAC_SIZE + SGX_AESGCM_IV_SIZE,
+		lenOut,
+		p_dst,
+		encMessage + SGX_AESGCM_MAC_SIZE,
+    SGX_AESGCM_IV_SIZE,
+		NULL, 0,
+		(sgx_aes_gcm_128bit_tag_t *) encMessage);
+	memcpy(decMessageOut, p_dst, lenOut);
+  return status;
 }
 
 // Retrieve a substring from a character buffer

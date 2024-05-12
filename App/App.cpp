@@ -738,38 +738,44 @@ int SGX_CDECL main(int argc, char *argv[]) {
         if (process_vault(global_eid1, vault1_filename, user_password) != EXIT_SUCCESS) return EXIT_FAILURE;
         uint8_t serialized_vault1[vault_total_size(loaded_vault)];
         size_t serialized_vault1_size = vault_serialize(loaded_vault, (char*)serialized_vault1);
+        hexdump(serialized_vault1, serialized_vault1_size);
 
         // Encrypt vault data in enclave1 using e1_encrypt_data
-        size_t encrypted_vault1_size = vault_total_size(loaded_vault);
-        uint8_t encrypted_vault1[encrypted_vault1_size];
+        size_t encrypted_vault1_size = vault_total_size(loaded_vault) + SGX_AESGCM_MAC_SIZE + SGX_AESGCM_IV_SIZE;
+        uint8_t encrypted_vault1[encrypted_vault1_size+1];
         ecall_status = e1_encrypt_data(global_eid1, &ret, serialized_vault1, serialized_vault1_size, encrypted_vault1, encrypted_vault1_size);
         if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
-          fprintf(stderr, "Error: Failed to encrypt vault data.\n");
+          print_error_message(ecall_status, "e1_encrypt_data");
+          fprintf(stderr, "Error: Failed to encrypt vault data %d %d.\n", ecall_status, ret);
           exit(EXIT_FAILURE);
         }
-
+        encrypted_vault1[encrypted_vault1_size] = '\0';
         hexdump(encrypted_vault1, encrypted_vault1_size);
-        hexdump(serialized_vault1, serialized_vault1_size);
 
         // Decrypt vault1 in enclave2 using e2_decrypt_data
         size_t decrypted_vault2_size = encrypted_vault1_size;
-        uint8_t decrypted_vault2[decrypted_vault2_size];
-        ecall_status = e2_decrypt_data(global_eid2, &ret, encrypted_vault1, encrypted_vault1_size, decrypted_vault2, decrypted_vault2_size);
+        uint8_t decrypted_vault2[decrypted_vault2_size+1];
+        // TODO change to e2
+        ecall_status = e1_decrypt_data(global_eid1, &ret, encrypted_vault1, encrypted_vault1_size, decrypted_vault2, decrypted_vault2_size);
         if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
-          fprintf(stderr, "Error: Failed to decrypt vault data.\n");
+          print_error_message(ret, "e1_decrypt_data");
+          fprintf(stderr, "Error: Failed to decrypt vault data %d %d.\n", ecall_status, ret);
           exit(EXIT_FAILURE);
         }
+        decrypted_vault2[decrypted_vault2_size] = '\0';
+        hexdump(decrypted_vault2, decrypted_vault2_size);
 
-        //serialize vault with data and seal it
+        //serialize vault with data and seal it from enclave2
         //ecall_status = e2_seal_data(global_eid2, decrypted_vault2, decrypted_vault2_size);
         //if (ocall_save_vault((const uint8_t *)decrypted_vault2, decrypted_vault2_size, vault2_filename) != 0) {
         //  fprintf(stderr, "Error: Failed to save encrypted vault data.\n");
         //  vault_free(loaded_vault);
         //  exit(EXIT_FAILURE);
+        //} else {
+        //  printf("Vault contents cloned successfully.\n");
+        //  vault_free(loaded_vault);
         //}
 
-        printf("Vault contents cloned successfully.\n");
-        vault_free(loaded_vault);
         break;
       }
 
