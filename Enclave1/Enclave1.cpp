@@ -59,16 +59,24 @@ int printf(const char* fmt, ...) {
 }
 
 /*
- * DH key exchange data (4 more ECALLs)
+ * DH key exchange data
  */
 
 static sgx_dh_session_t e1_session;
 static sgx_key_128bit_t e1_aek;
-static sgx_dh_session_enclave_identity_t e1_responder_identity;
+static sgx_dh_session_enclave_identity_t e1_identity;
 
 // step 1
-void e1_init_session(sgx_status_t* dh_status) {
+void e1_init_session_initiator(sgx_status_t* dh_status) {
   *dh_status = sgx_dh_init_session(SGX_DH_SESSION_INITIATOR, &e1_session);
+}
+void e1_init_session_responder(sgx_status_t* dh_status) {
+  *dh_status = sgx_dh_init_session(SGX_DH_SESSION_RESPONDER, &e1_session);
+}
+
+// step 3
+void e1_create_message1(sgx_dh_msg1_t *msg1, sgx_status_t *dh_status) {
+  *dh_status = sgx_dh_responder_gen_msg1(msg1, &e1_session);
 }
 
 // step 5
@@ -76,9 +84,14 @@ void e1_process_message1(const sgx_dh_msg1_t* msg1, sgx_dh_msg2_t* msg2, sgx_sta
   *dh_status = sgx_dh_initiator_proc_msg1(msg1, msg2, &e1_session);
 }
 
+// step 7
+void e1_process_message2(const sgx_dh_msg2_t *msg2, sgx_dh_msg3_t *msg3, sgx_status_t *dh_status) {
+  *dh_status = sgx_dh_responder_proc_msg2(msg2, msg3, &e1_session, &e1_aek, &e1_identity);
+}
+
 // step 9
 void e1_process_message3(const sgx_dh_msg3_t* msg3, sgx_status_t* dh_status) {
-  *dh_status = sgx_dh_initiator_proc_msg3(msg3, &e1_session, &e1_aek, &e1_responder_identity);
+  *dh_status = sgx_dh_initiator_proc_msg3(msg3, &e1_session, &e1_aek, &e1_identity);
 }
 
 void e1_show_secret_key(void) {

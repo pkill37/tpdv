@@ -268,7 +268,7 @@ int ocall_save_vault(const uint8_t *sealed_data, const size_t sealed_size, const
     fclose(file);
     return 1;
   }
-  printf("\n\nAll saved n gucci: %s - %zu\n\n",filename, sealed_size);
+  printf("\n\nAll saved: %s - %zu\n\n",filename, sealed_size);
   fclose(file);
   return 0;
 }
@@ -279,7 +279,6 @@ int ocall_load_vault(uint8_t *unsealed_data, const size_t unsealed_size) {
     printf("Vault deserialization failed\n");
     return 1;
   }
-  //printf("\n\nDESERIALIZED VAULT: last entry: %s - data: %s\n\n",loaded_vault->head->name,loaded_vault->head->data);
   return 0;
 }
 
@@ -694,19 +693,19 @@ int SGX_CDECL main(int argc, char *argv[]) {
         sgx_dh_msg3_t msg3;
 
         // DH step 1
-        if ((ret = e1_init_session(global_eid1, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
+        if ((ret = e1_init_session_initiator(global_eid1, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
           print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e1_init_session");
           return 1;
         }
 
         // DH step 2
-        if ((ret = e2_init_session(global_eid2, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
+        if ((ret = e2_init_session_responder(global_eid2, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
           print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e2_init_session");
           return 1;
         }
 
         // DH step 3
-        if ((ret = e2_create_message1(global_eid2, &msg1, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
+        if ((ret = e2_create_message1(global_eid1, &msg1, &dh_status)) != SGX_SUCCESS || dh_status != SGX_SUCCESS) {
           print_error_message((ret != SGX_SUCCESS) ? ret : dh_status, "e2_create_message1");
           return 1;
         }
@@ -733,6 +732,7 @@ int SGX_CDECL main(int argc, char *argv[]) {
         }
 
         e1_show_secret_key(global_eid1);
+        e2_show_secret_key(global_eid2);
 
         // Unseal vault1 and load it into global variable loaded_vault, then serialize it
         if (process_vault(global_eid1, vault1_filename, user_password) != EXIT_SUCCESS) return EXIT_FAILURE;
@@ -742,31 +742,28 @@ int SGX_CDECL main(int argc, char *argv[]) {
 
         // Encrypt vault data in enclave1 using e1_encrypt_data
         size_t encrypted_vault1_size = vault_total_size(loaded_vault) + SGX_AESGCM_MAC_SIZE + SGX_AESGCM_IV_SIZE;
-        uint8_t encrypted_vault1[encrypted_vault1_size+1];
+        uint8_t encrypted_vault1[encrypted_vault1_size];
         ecall_status = e1_encrypt_data(global_eid1, &ret, serialized_vault1, serialized_vault1_size, encrypted_vault1, encrypted_vault1_size);
         if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
           print_error_message(ecall_status, "e1_encrypt_data");
           fprintf(stderr, "Error: Failed to encrypt vault data %d %d.\n", ecall_status, ret);
           exit(EXIT_FAILURE);
         }
-        encrypted_vault1[encrypted_vault1_size] = '\0';
         hexdump(encrypted_vault1, encrypted_vault1_size);
 
         // Decrypt vault1 in enclave2 using e2_decrypt_data
         size_t decrypted_vault2_size = encrypted_vault1_size;
-        uint8_t decrypted_vault2[decrypted_vault2_size+1];
-        // TODO change to e2
-        ecall_status = e1_decrypt_data(global_eid1, &ret, encrypted_vault1, encrypted_vault1_size, decrypted_vault2, decrypted_vault2_size);
+        uint8_t decrypted_vault2[decrypted_vault2_size];
+        ecall_status = e2_decrypt_data(global_eid1, &ret, encrypted_vault1, encrypted_vault1_size, decrypted_vault2, decrypted_vault2_size);
         if (ecall_status != SGX_SUCCESS || ret != SGX_SUCCESS) {
           print_error_message(ret, "e1_decrypt_data");
           fprintf(stderr, "Error: Failed to decrypt vault data %d %d.\n", ecall_status, ret);
           exit(EXIT_FAILURE);
         }
-        decrypted_vault2[decrypted_vault2_size] = '\0';
         hexdump(decrypted_vault2, decrypted_vault2_size);
 
         //serialize vault with data and seal it from enclave2
-        //ecall_status = e2_seal_data(global_eid2, decrypted_vault2, decrypted_vault2_size);
+        //ecall_status = e2_seal_data(global_eid2, &ret, decrypted_vault2, decrypted_vault2_size);
         //if (ocall_save_vault((const uint8_t *)decrypted_vault2, decrypted_vault2_size, vault2_filename) != 0) {
         //  fprintf(stderr, "Error: Failed to save encrypted vault data.\n");
         //  vault_free(loaded_vault);

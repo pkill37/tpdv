@@ -6,6 +6,7 @@ rm -f *.dat
 which clang-format && clang-format --style=file:clang-format.yaml --verbose -i **/*.cpp **/*.h
 which cppcheck && cppcheck **/*.cpp **/*.h
 
+bash new_private_keys.bash
 make clean
 make
 

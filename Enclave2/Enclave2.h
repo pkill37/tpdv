@@ -36,16 +36,28 @@
 #include <stdlib.h>
 
 #include "sgx_dh.h"
+#include "sgx_tseal.h"
+#include "../App/Vault.h"
 
 #if defined(__cplusplus)
 extern "C" {
 #endif
 
-int printf(const char *fmt, ...);
-void e2_init_session(sgx_status_t *dh_status);
+int printf(const char* fmt, ...);
+void e2_init_session_initiator(sgx_status_t* dh_status);
+void e2_init_session_responder(sgx_status_t* dh_status);
 void e2_create_message1(sgx_dh_msg1_t *msg1, sgx_status_t *dh_status);
+void e2_process_message1(const sgx_dh_msg1_t* msg1, sgx_dh_msg2_t* msg2, sgx_status_t* dh_status);
 void e2_process_message2(const sgx_dh_msg2_t *msg2, sgx_dh_msg3_t *msg3, sgx_status_t *dh_status);
-sgx_status_t e2_decrypt_data(const uint8_t *cipher_text, uint32_t cipher_text_length, uint8_t *plain_text, uint32_t plain_text_length);
+void e2_process_message3(const sgx_dh_msg3_t* msg3, sgx_status_t* dh_status);
+void e2_show_secret_key(void);
+sgx_status_t e2_encrypt_data(uint8_t* plain_text, uint32_t plain_text_length, uint8_t* cipher_text, uint32_t cipher_text_length);
+sgx_status_t e2_decrypt_data(uint8_t *cipher_text, uint32_t cipher_text_length, uint8_t *plain_text, uint32_t plain_text_length);
+sgx_status_t seal_vault(const char* vault, size_t vault_size, sgx_sealed_data_t* sealed_data, size_t sealed_size);
+sgx_status_t e2_seal_data(char* data, size_t data_size);
+sgx_status_t e2_unseal_data(uint8_t* sealed_data, size_t sealed_data_size, const char* user_password);
+sgx_status_t e2_update_password(uint8_t* sealed_data, size_t sealed_data_size, const char* user_password, const char* new_password);
+sgx_status_t e2_add_item(uint8_t* sealed_data, size_t sealed_data_size, char* entry, size_t entry_size, const char* filename, const char* user_password);
 
 #if defined(__cplusplus)
 }
