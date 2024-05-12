@@ -1,12 +1,10 @@
 #!/bin/sh
 set -ex
 
-which clang-format || sudo apt install -y clang-format
-which cppcheck || sudo apt install -y cppcheck
+rm -f *.dat
 
-clang-format --style=file:clang-format.yaml --verbose -i **/*.cpp **/*.h
-
-cppcheck **/*.cpp **/*.h
+which clang-format && clang-format --style=file:clang-format.yaml --verbose -i **/*.cpp **/*.h
+which cppcheck && cppcheck **/*.cpp **/*.h
 
 make clean
 make
@@ -24,3 +22,5 @@ make
 ./app -v vault2.dat password2 john
 ./app -a vault2.dat password2 assets/entry1
 ./app -l vault2.dat password2
+
+./app -c vault2.dat password2 vault3.dat
