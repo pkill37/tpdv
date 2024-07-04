@@ -1,6 +1,4 @@
 # TPDV
-- Fabio Maia
-- Eduardo Monteiro
 
 Tamper-Proof Digital Vault, or TPDV, is a proof of concept for a secure vault Linux application relying on Intel SGX enclaves.
 
